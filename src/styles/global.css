@@ -171,6 +171,20 @@ footer a:hover {
 	color: var(--accent);
 }
 
+.icon-links {
+	display: flex;
+	align-items: center;
+	gap: 0.9rem;
+}
+
+.icon-links a {
+	display: inline-flex;
+}
+
+.icon-links svg {
+	transition: color 0.15s ease;
+}
+
 .prose p,
 .prose li {
 	color: var(--text);
@@ -178,6 +192,29 @@ footer a:hover {
 
 .no-lowercase {
 	text-transform: none;
+}
+
+.typewriter::after {
+	content: '';
+	display: inline-block;
+	width: 0.55em;
+	height: 1em;
+	margin-left: 2px;
+	background: var(--accent);
+	vertical-align: text-bottom;
+	animation: caret-blink 1s step-end infinite;
+}
+
+@keyframes caret-blink {
+	50% {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.typewriter::after {
+		animation: none;
+	}
 }
 
 .prose {
