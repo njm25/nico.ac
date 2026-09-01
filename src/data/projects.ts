@@ -8,14 +8,14 @@ export interface Project {
 export const projects: Project[] = [
 	{
 		title: 'Nicos Jobs',
-		description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
-		link: 'https://github.com/njm25/NicosJobs',
+		description: 'A job board aggregate which scrapes thousands of companies job pages directly and allows users to track application status.',
+		link: 'https://nicosjobs.com',
 		year: '2026',
 	},
 	{
 		title: 'The Film Archive',
-		description: 'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-		link: '#',
+		description: 'A collection of public domain films presented in an easy to stream format.',
+		link: 'https://thefilmarchive.org',
 		year: '2026',
 	},
 ];

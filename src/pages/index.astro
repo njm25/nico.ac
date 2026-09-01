@@ -9,13 +9,14 @@ const posts = (await getCollection('blog')).sort(
 ---
 
 <Base title="nico">
-	<h1>nico</h1>
 	<p class="prose">
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut
-		labore et dolore magna aliqua, ut enim ad minim veniam.
+		im a guy interested in computers and whatnot. i like building software and tinkering with
+		servers. ive got experience in developing enterprise applications with .net and angular and
+		ci/cd experience with aws and github actions. i also have a homelab which i use to run fun little pet
+		projects <span class="no-lowercase">:D</span>
 	</p>
 
-	<h2>projects</h2>
+	<h2>things ive built</h2>
 	<div class="list">
 		{
 			projects.slice(0, 2).map((p) => (
@@ -30,7 +31,7 @@ const posts = (await getCollection('blog')).sort(
 		}
 	</div>
 
-	<h2>writing</h2>
+	<h2>blog posts</h2>
 	<div class="list">
 		{
 			posts.slice(0, 3).map((post) => (

@@ -5,15 +5,13 @@ import { projects } from '../data/projects';
 
 <Base title="nico — projects" description="things nico has built">
 	<h1>projects</h1>
-	<div class="list">
+	<div class="project-grid">
 		{
 			projects.map((p) => (
-				<a class="list-item" href={p.link} target="_blank" rel="noopener noreferrer">
-					<div class="list-item-body">
-						<span class="title">{p.title}</span>
-						<span class="desc">{p.description}</span>
-					</div>
+				<a class="project-card" href={p.link} target="_blank" rel="noopener noreferrer">
 					<span class="meta">{p.year}</span>
+					<span class="title">{p.title}</span>
+					<span class="desc">{p.description}</span>
 				</a>
 			))
 		}

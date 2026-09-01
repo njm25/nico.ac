@@ -147,8 +147,14 @@ p {
 }
 
 footer {
-	margin-top: 4rem;
-	padding-top: 1.5rem;
+	position: fixed;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	margin: 0 auto;
+	max-width: var(--max-width);
+	padding: 1rem 1.5rem;
+	background: var(--bg);
 	border-top: 1px solid var(--border);
 	color: var(--text-faint);
 	font-size: 0.8rem;
@@ -170,6 +176,55 @@ footer a:hover {
 	color: var(--text);
 }
 
+.no-lowercase {
+	text-transform: none;
+}
+
 .prose {
 	font-size: 0.95rem;
+}
+
+.project-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 1px;
+	background: var(--border);
+	border: 1px solid var(--border);
+}
+
+.project-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	background: var(--bg);
+	padding: 1.5rem;
+	border-bottom: none;
+	border-radius: 0;
+	transition: background 0.15s ease;
+}
+
+.project-card:hover {
+	background: var(--bg-raised);
+	border-color: transparent;
+}
+
+.project-card:hover .title {
+	color: var(--accent);
+}
+
+.project-card .meta {
+	color: var(--text-faint);
+	font-size: 0.8rem;
+}
+
+.project-card .title {
+	font-weight: 600;
+	color: var(--text);
+	transition: color 0.15s ease;
+}
+
+.project-card .desc {
+	color: var(--text-dim);
+	font-size: 0.85rem;
+	line-height: 1.6;
 }
