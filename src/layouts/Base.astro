@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import SandboxMenu from '../components/SandboxMenu.astro';
 
 interface Props {
 	title: string;
@@ -28,6 +29,7 @@ const current = Astro.url.pathname;
 		/>
 	</head>
 	<body>
+		<SandboxMenu />
 		<div class="wrap">
 			<nav>
 				<a class="brand" href="/">nico</a>
