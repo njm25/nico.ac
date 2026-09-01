@@ -19,7 +19,7 @@ const posts = (await getCollection('blog')).sort(
 	<h2>things ive built</h2>
 	<div class="list">
 		{
-			projects.slice(0, 2).map((p) => (
+			projects.slice(0, 6).map((p) => (
 				<a class="list-item" href={p.link} target="_blank" rel="noopener noreferrer">
 					<div class="list-item-body">
 						<span class="title">{p.title}</span>

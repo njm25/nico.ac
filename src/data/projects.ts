@@ -18,4 +18,10 @@ export const projects: Project[] = [
 		link: 'https://thefilmarchive.org',
 		year: '2026',
 	},
+	{
+		title: 'NCCasino',
+		description: 'A casino plugin for minecraft servers. Feature rich with many games.',
+		link: 'https://www.curseforge.com/minecraft/bukkit-plugins/nccasino',
+		year: '2024',
+	},
 ];
