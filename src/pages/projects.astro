@@ -1,0 +1,21 @@
+---
+import Base from '../layouts/Base.astro';
+import { projects } from '../data/projects';
+---
+
+<Base title="nico — projects" description="things nico has built">
+	<h1>projects</h1>
+	<div class="list">
+		{
+			projects.map((p) => (
+				<a class="list-item" href={p.link} target="_blank" rel="noopener noreferrer">
+					<div class="list-item-body">
+						<span class="title">{p.title}</span>
+						<span class="desc">{p.description}</span>
+					</div>
+					<span class="meta">{p.year}</span>
+				</a>
+			))
+		}
+	</div>
+</Base>

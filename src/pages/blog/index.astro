@@ -1,0 +1,27 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+
+const posts = (await getCollection('blog')).sort(
+	(a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+---
+
+<Base title="nico — blog" description="words nico has written">
+	<h1>blog</h1>
+	<div class="list">
+		{
+			posts.map((post) => (
+				<a class="list-item" href={`/blog/${post.id}`}>
+					<div class="list-item-body">
+						<span class="title">{post.data.title}</span>
+						<span class="desc">{post.data.description}</span>
+					</div>
+					<span class="meta">
+						{post.data.date.toLocaleDateString('en-us', { month: 'short', year: 'numeric', timeZone: 'UTC' })}
+					</span>
+				</a>
+			))
+		}
+	</div>
+</Base>

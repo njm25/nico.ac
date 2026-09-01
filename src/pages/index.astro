@@ -1,0 +1,48 @@
+---
+import Base from '../layouts/Base.astro';
+import { projects } from '../data/projects';
+import { getCollection } from 'astro:content';
+
+const posts = (await getCollection('blog')).sort(
+	(a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+---
+
+<Base title="nico">
+	<h1>nico</h1>
+	<p class="prose">
+		Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut
+		labore et dolore magna aliqua, ut enim ad minim veniam.
+	</p>
+
+	<h2>projects</h2>
+	<div class="list">
+		{
+			projects.slice(0, 2).map((p) => (
+				<a class="list-item" href={p.link} target="_blank" rel="noopener noreferrer">
+					<div class="list-item-body">
+						<span class="title">{p.title}</span>
+						<span class="desc">{p.description}</span>
+					</div>
+					<span class="meta">{p.year}</span>
+				</a>
+			))
+		}
+	</div>
+
+	<h2>writing</h2>
+	<div class="list">
+		{
+			posts.slice(0, 3).map((post) => (
+				<a class="list-item" href={`/blog/${post.id}`}>
+					<div class="list-item-body">
+						<span class="title">{post.data.title}</span>
+					</div>
+					<span class="meta">
+						{post.data.date.toLocaleDateString('en-us', { month: 'short', year: 'numeric', timeZone: 'UTC' })}
+					</span>
+				</a>
+			))
+		}
+	</div>
+</Base>

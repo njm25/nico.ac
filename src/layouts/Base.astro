@@ -1,0 +1,52 @@
+---
+import '../styles/global.css';
+
+interface Props {
+	title: string;
+	description?: string;
+}
+
+const { title, description = 'nico — software engineer' } = Astro.props;
+const current = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" href="/favicon.svg" />
+		<link rel="alternate" type="application/rss+xml" title="nico — blog" href="/rss.xml" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
+			rel="stylesheet"
+		/>
+	</head>
+	<body>
+		<div class="wrap">
+			<nav>
+				<a class="brand" href="/">nico</a>
+				<a href="/" aria-current={current === '/' ? 'page' : undefined}>home</a>
+				<a href="/projects" aria-current={current.startsWith('/projects') ? 'page' : undefined}>projects</a>
+				<a href="/blog" aria-current={current.startsWith('/blog') ? 'page' : undefined}>blog</a>
+			</nav>
+			<main>
+				<slot />
+			</main>
+			<footer>
+				<span>nico.ac</span>
+				<span>
+					<a href="https://github.com/njm25" target="_blank" rel="noopener noreferrer">github</a>
+					·
+					<a href="https://www.linkedin.com/in/nicomilette/" target="_blank" rel="noopener noreferrer">linkedin</a>
+					·
+					<a href="/rss.xml">rss</a>
+				</span>
+			</footer>
+		</div>
+	</body>
+</html>
