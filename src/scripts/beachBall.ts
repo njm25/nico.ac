@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { initAudio, playBounce, playGrab, playRelease, playPop, playSpawn } from './sandboxAudio';
 
 interface Ball {
 	mesh: THREE.Mesh;
@@ -15,6 +16,7 @@ const AIR_DAMPING = 0.999;
 const MAX_DT = 1 / 30;
 const BALL_RADIUS = 0.55;
 const DRAG_THRESHOLD = 6;
+const BOUNCE_SOUND_MIN_SPEED = 0.5;
 
 let scene: THREE.Scene | null = null;
 let camera: THREE.PerspectiveCamera | null = null;
@@ -153,6 +155,7 @@ function onPointerDown(e: PointerEvent) {
 	dragPlaneZ = hit.mesh.position.z;
 	lastPointerWorld = worldFromScreen(e.clientX, e.clientY, dragPlaneZ);
 	lastPointerTime = performance.now();
+	playGrab();
 }
 
 function onPointerMove(e: PointerEvent) {
@@ -190,6 +193,7 @@ function onPointerUp(e: PointerEvent) {
 			ball.velocity.x * 0.6,
 			(Math.random() - 0.5) * 2
 		);
+		playRelease();
 	}
 }
 
@@ -197,6 +201,8 @@ function popBall(ball: Ball) {
 	const index = balls.indexOf(ball);
 	if (index === -1) return;
 	balls.splice(index, 1);
+
+	playPop();
 
 	const position = ball.mesh.position.clone();
 	scene!.remove(ball.mesh);
@@ -237,6 +243,9 @@ function stepPhysics(dt: number) {
 
 		if (ball.mesh.position.y <= floorY) {
 			ball.mesh.position.y = floorY;
+			if (ball.velocity.y < -BOUNCE_SOUND_MIN_SPEED) {
+				playBounce(Math.min(Math.abs(ball.velocity.y) / 8, 1));
+			}
 			if (ball.velocity.y < 0) ball.velocity.y = -ball.velocity.y * RESTITUTION;
 			ball.velocity.x *= GROUND_FRICTION;
 			ball.velocity.z *= GROUND_FRICTION;
@@ -247,9 +256,15 @@ function stepPhysics(dt: number) {
 		const rightBound = halfWidth - BALL_RADIUS;
 		if (ball.mesh.position.x <= leftBound) {
 			ball.mesh.position.x = leftBound;
+			if (Math.abs(ball.velocity.x) > BOUNCE_SOUND_MIN_SPEED) {
+				playBounce(Math.min(Math.abs(ball.velocity.x) / 8, 1));
+			}
 			ball.velocity.x = -ball.velocity.x * RESTITUTION;
 		} else if (ball.mesh.position.x >= rightBound) {
 			ball.mesh.position.x = rightBound;
+			if (Math.abs(ball.velocity.x) > BOUNCE_SOUND_MIN_SPEED) {
+				playBounce(Math.min(Math.abs(ball.velocity.x) / 8, 1));
+			}
 			ball.velocity.x = -ball.velocity.x * RESTITUTION;
 		}
 
@@ -312,6 +327,9 @@ function resolveBallCollisions() {
 				const approachSpeed = anchor.velocity.clone().sub(other.velocity).dot(nAO);
 				if (approachSpeed > 0) {
 					other.velocity.addScaledVector(nAO, approachSpeed * BALL_RESTITUTION);
+					if (approachSpeed > BOUNCE_SOUND_MIN_SPEED) {
+						playBounce(Math.min(approachSpeed / 8, 1));
+					}
 				}
 				continue;
 			}
@@ -327,6 +345,9 @@ function resolveBallCollisions() {
 			const impulse = normal.clone().multiplyScalar(speedAlongNormal * BALL_RESTITUTION);
 			a.velocity.sub(impulse);
 			b.velocity.add(impulse);
+			if (speedAlongNormal > BOUNCE_SOUND_MIN_SPEED) {
+				playBounce(Math.min(speedAlongNormal / 8, 1));
+			}
 		}
 	}
 }
@@ -353,6 +374,7 @@ function startAnimating() {
 
 export function spawnBeachBall() {
 	try {
+		initAudio();
 		ensureScene();
 
 		const geometry = new THREE.SphereGeometry(BALL_RADIUS, 32, 32);
@@ -373,6 +395,7 @@ export function spawnBeachBall() {
 		});
 
 		startAnimating();
+		playSpawn();
 	} catch (err) {
 		console.error('beach ball spawn failed', err);
 		showErrorBanner(err instanceof Error ? err.message : String(err));
