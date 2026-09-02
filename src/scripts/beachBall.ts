@@ -17,8 +17,6 @@ const MAX_DT = 1 / 30;
 const BALL_RADIUS = 0.55;
 const DRAG_THRESHOLD = 6;
 const BOUNCE_SOUND_MIN_SPEED = 0.5;
-const THROW_HISTORY_MS = 100;
-const THROW_MAX_SPEED = 18;
 
 let scene: THREE.Scene | null = null;
 let camera: THREE.PerspectiveCamera | null = null;
@@ -34,8 +32,9 @@ const particles: { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number }[] =
 let dragTarget: Ball | null = null;
 let pointerDownPos = { x: 0, y: 0 };
 let pointerMoved = 0;
+let lastPointerWorld = new THREE.Vector3();
+let lastPointerTime = 0;
 let dragPlaneZ = 0;
-const dragHistory: { time: number; pos: THREE.Vector3 }[] = [];
 
 function showErrorBanner(message: string) {
 	const banner = document.createElement('div');
@@ -154,9 +153,8 @@ function onPointerDown(e: PointerEvent) {
 	pointerDownPos = { x: e.clientX, y: e.clientY };
 	pointerMoved = 0;
 	dragPlaneZ = hit.mesh.position.z;
-
-	dragHistory.length = 0;
-	dragHistory.push({ time: performance.now(), pos: worldFromScreen(e.clientX, e.clientY, dragPlaneZ) });
+	lastPointerWorld = worldFromScreen(e.clientX, e.clientY, dragPlaneZ);
+	lastPointerTime = performance.now();
 	playGrab();
 }
 
@@ -171,10 +169,10 @@ function onPointerMove(e: PointerEvent) {
 	dragTarget.mesh.position.copy(world);
 
 	const now = performance.now();
-	dragHistory.push({ time: now, pos: world });
-	while (dragHistory.length > 1 && now - dragHistory[0].time > THROW_HISTORY_MS) {
-		dragHistory.shift();
-	}
+	const dt = Math.max((now - lastPointerTime) / 1000, 1 / 120);
+	dragTarget.velocity.copy(world).sub(lastPointerWorld).divideScalar(dt);
+	lastPointerWorld = world;
+	lastPointerTime = now;
 }
 
 function onPointerUp(e: PointerEvent) {
@@ -189,18 +187,7 @@ function onPointerUp(e: PointerEvent) {
 	if (pointerMoved < DRAG_THRESHOLD) {
 		popBall(ball);
 	} else {
-		const now = performance.now();
-		const releasePos = worldFromScreen(e.clientX, e.clientY, dragPlaneZ);
-		dragHistory.push({ time: now, pos: releasePos });
-		while (dragHistory.length > 1 && now - dragHistory[0].time > THROW_HISTORY_MS) {
-			dragHistory.shift();
-		}
-
-		const oldest = dragHistory[0];
-		const dt = Math.max((now - oldest.time) / 1000, 1 / 60);
-		ball.velocity.copy(releasePos).sub(oldest.pos).divideScalar(dt);
-		ball.velocity.clampLength(0, THROW_MAX_SPEED);
-
+		ball.velocity.clampLength(0, 14);
 		ball.angularVelocity.set(
 			-ball.velocity.y * 0.6,
 			ball.velocity.x * 0.6,
@@ -208,8 +195,6 @@ function onPointerUp(e: PointerEvent) {
 		);
 		playRelease();
 	}
-
-	dragHistory.length = 0;
 }
 
 function popBall(ball: Ball) {
