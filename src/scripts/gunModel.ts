@@ -22,6 +22,10 @@ const BASE_ROLL = -0.05;
 // where the crosshair lives in world space; the barrel is aimed at this point
 const AIM_DISTANCE = 7;
 const AIM_EASE = 14;
+// a tap gives no hover to track from, so the gun swings hard for a moment to
+// reach the target rather than drifting there long after the shot
+const AIM_EASE_QUICK = 34;
+const AIM_BOOST_MS = 260;
 const BOB_SPEED = 1.6;
 const BOB_AMOUNT = 0.006;
 
@@ -54,7 +58,7 @@ let yaw = 0;
 let pitch = 0;
 let recoil = 0;
 let recoilVelocity = 0;
-let snapAim = false;
+let aimBoostUntil = 0;
 let flashTimer = 0;
 let flashSeed = 0;
 let running = false;
@@ -250,11 +254,11 @@ export function setViewmodelVisible(next: boolean) {
 	}
 }
 
-// snap skips the easing: a touch tap has no hover to swing across from, so the
-// gun has to be pointing at the target on the very frame it fires
-export function aimViewmodel(clientX: number, clientY: number, snap = false) {
+// quick asks for a fast swing rather than a jump: used for taps, which arrive
+// with no hover history behind them
+export function aimViewmodel(clientX: number, clientY: number, quick = false) {
 	pointerNdc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
-	if (snap) snapAim = true;
+	if (quick) aimBoostUntil = performance.now() + AIM_BOOST_MS;
 	startLoop();
 }
 
@@ -298,15 +302,10 @@ function frame() {
 	scratch.copy(aimTarget).sub(rig!.position).normalize();
 	const targetPitch = Math.asin(THREE.MathUtils.clamp(scratch.y, -1, 1));
 	const targetYaw = Math.atan2(-scratch.x, -scratch.z);
-	if (snapAim) {
-		pitch = targetPitch;
-		yaw = targetYaw;
-		snapAim = false;
-	} else {
-		const ease = Math.min(dt * AIM_EASE, 1);
-		pitch += (targetPitch - pitch) * ease;
-		yaw += shortestAngle(yaw, targetYaw) * ease;
-	}
+	const rate = performance.now() < aimBoostUntil ? AIM_EASE_QUICK : AIM_EASE;
+	const ease = Math.min(dt * rate, 1);
+	pitch += (targetPitch - pitch) * ease;
+	yaw += shortestAngle(yaw, targetYaw) * ease;
 
 	recoilVelocity += (-RECOIL_STIFFNESS * recoil - RECOIL_DAMPING * recoilVelocity) * dt;
 	recoil += recoilVelocity * dt;
