@@ -265,3 +265,165 @@ footer a:hover {
 	font-size: 0.85rem;
 	line-height: 1.6;
 }
+
+/* ---------------------------------------------------------- gun sandbox */
+
+/* native cursor is hidden in favour of the drawn reticle */
+html[data-gun='armed'],
+html[data-gun='armed'] * {
+	cursor: none !important;
+}
+
+html[data-gun='armed'] body {
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+/* shot characters keep their box so the page never reflows under you */
+.gun-frag.shot {
+	visibility: hidden;
+}
+
+#gun-viewmodel {
+	position: fixed;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 9997;
+	pointer-events: none;
+}
+
+#gun-reticle {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 40px;
+	height: 40px;
+	margin: -20px 0 0 -20px;
+	/* above the sandbox menu (9999) so it is never clipped by the tools */
+	z-index: 10001;
+	pointer-events: none;
+	color: var(--accent);
+	opacity: 0;
+	transition: opacity 0.15s ease;
+	filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.95));
+}
+
+html[data-gun='armed'] #gun-reticle {
+	opacity: 1;
+}
+
+.reticle-ticks,
+.reticle-dot {
+	transform-box: fill-box;
+	transform-origin: center;
+}
+
+#gun-reticle.firing .reticle-ticks {
+	animation: reticle-kick 0.19s ease-out;
+}
+
+#gun-reticle.firing .reticle-dot {
+	animation: reticle-dot 0.19s ease-out;
+}
+
+@keyframes reticle-kick {
+	0% {
+		transform: scale(1);
+	}
+	28% {
+		transform: scale(1.5);
+	}
+	100% {
+		transform: scale(1);
+	}
+}
+
+@keyframes reticle-dot {
+	0% {
+		transform: scale(1);
+		opacity: 1;
+	}
+	28% {
+		transform: scale(2.2);
+		opacity: 0.5;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+#gun-debris {
+	position: fixed;
+	inset: 0;
+	z-index: 9996;
+	pointer-events: none;
+	overflow: hidden;
+}
+
+.gun-debris-char {
+	position: absolute;
+	top: 0;
+	left: 0;
+	display: block;
+	text-align: center;
+	white-space: pre;
+	will-change: transform;
+	transition: opacity 0.35s linear;
+}
+
+.gun-debris-char.fading {
+	opacity: 0;
+}
+
+/* holes sit in page coordinates so they stay stuck to the text they hit */
+#gun-holes {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 0;
+	height: 0;
+	/* below the beach ball canvas (-1) so balls roll over the holes */
+	z-index: -2;
+	pointer-events: none;
+}
+
+.gun-hole {
+	position: absolute;
+	top: -13px;
+	left: -13px;
+	width: 26px;
+	height: 26px;
+	display: block;
+	/* scorch halo under the svg core and cracks */
+	background: radial-gradient(circle, rgba(5, 6, 10, 0.9) 0 16%, rgba(5, 6, 10, 0.5) 34%, rgba(5, 6, 10, 0) 64%);
+}
+
+main.gun-shake {
+	animation: gun-shake 0.14s linear;
+}
+
+@keyframes gun-shake {
+	0% {
+		transform: translate(0, 0);
+	}
+	25% {
+		transform: translate(2px, -2px);
+	}
+	50% {
+		transform: translate(-2px, 1px);
+	}
+	75% {
+		transform: translate(1px, 2px);
+	}
+	100% {
+		transform: translate(0, 0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	main.gun-shake {
+		animation: none;
+	}
+}

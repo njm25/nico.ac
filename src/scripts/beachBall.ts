@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { initAudio, playBounce, playGrab, playRelease, playPop, playSpawn } from './sandboxAudio';
+import { getActiveTool } from './sandboxState';
 
 interface Ball {
 	mesh: THREE.Mesh;
@@ -139,6 +140,8 @@ function raycastBalls(x: number, y: number): Ball | null {
 }
 
 function onPointerDown(e: PointerEvent) {
+	// the gun owns the pointer while it's armed; dragging is off
+	if (getActiveTool() === 'gun') return;
 	if (!balls.length) return;
 	const hit = raycastBalls(e.clientX, e.clientY);
 	if (!hit) return;
@@ -195,6 +198,17 @@ function onPointerUp(e: PointerEvent) {
 		);
 		playRelease();
 	}
+}
+
+// used by the gun tool: pop whatever ball is under the crosshair, if any
+export function tryPopAt(clientX: number, clientY: number): boolean {
+	if (!balls.length || !camera) return false;
+	const hit = raycastBalls(clientX, clientY);
+	if (!hit) return false;
+	if (dragTarget === hit) dragTarget = null;
+	popBall(hit);
+	startAnimating();
+	return true;
 }
 
 function popBall(ball: Ball) {

@@ -187,3 +187,131 @@ export function playSpawn() {
 	shimmer.start(audio.currentTime + 0.05);
 	shimmer.stop(audio.currentTime + 0.22);
 }
+
+function noiseBuffer(audio: AudioContext, seconds: number, decay: number): AudioBuffer {
+	const length = Math.floor(audio.sampleRate * seconds);
+	const buffer = audio.createBuffer(1, length, audio.sampleRate);
+	const data = buffer.getChannelData(0);
+	for (let i = 0; i < length; i++) {
+		data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+	}
+	return buffer;
+}
+
+export function playGunshot() {
+	const audio = ensureCtx();
+	if (!audio || !master) return;
+	const scale = voiceGainScale('gunshot');
+	if (scale <= 0) return;
+	const now = audio.currentTime;
+
+	// crack: bright noise burst swept down hard, the part that reads as "gun"
+	const crack = audio.createBufferSource();
+	crack.buffer = noiseBuffer(audio, 0.3, 2.5);
+
+	const crackFilter = audio.createBiquadFilter();
+	crackFilter.type = 'lowpass';
+	crackFilter.frequency.setValueAtTime(9000, now);
+	crackFilter.frequency.exponentialRampToValueAtTime(600, now + 0.18);
+	crackFilter.Q.value = 1.2;
+
+	const crackGain = audio.createGain();
+	envelope(crackGain, audio, 0.5 * scale, 0.001, 0.22);
+
+	crack.connect(crackFilter);
+	crackFilter.connect(crackGain);
+	crackGain.connect(master);
+	crack.start(now);
+	crack.stop(now + 0.32);
+
+	// body: low thump so it has weight on decent speakers
+	const body = audio.createOscillator();
+	const bodyGain = audio.createGain();
+	body.type = 'sine';
+	body.frequency.setValueAtTime(120, now);
+	body.frequency.exponentialRampToValueAtTime(42, now + 0.16);
+	body.connect(bodyGain);
+	bodyGain.connect(master);
+	envelope(bodyGain, audio, 0.34 * scale, 0.001, 0.18);
+	body.start(now);
+	body.stop(now + 0.24);
+
+	// tail: quiet room slap a beat after the crack
+	const tail = audio.createBufferSource();
+	tail.buffer = noiseBuffer(audio, 0.25, 1.2);
+
+	const tailFilter = audio.createBiquadFilter();
+	tailFilter.type = 'bandpass';
+	tailFilter.frequency.value = 1100;
+	tailFilter.Q.value = 0.6;
+
+	const tailGain = audio.createGain();
+	const tailStart = now + 0.05;
+	tailGain.gain.setValueAtTime(0.0001, tailStart);
+	tailGain.gain.linearRampToValueAtTime(0.07 * scale, tailStart + 0.01);
+	tailGain.gain.exponentialRampToValueAtTime(0.0001, tailStart + 0.22);
+
+	tail.connect(tailFilter);
+	tailFilter.connect(tailGain);
+	tailGain.connect(master);
+	tail.start(tailStart);
+	tail.stop(tailStart + 0.26);
+}
+
+export function playCock() {
+	const audio = ensureCtx();
+	if (!audio || !master) return;
+	const scale = voiceGainScale('cock');
+	if (scale <= 0) return;
+	const now = audio.currentTime;
+
+	// two dry clicks: slide back, slide forward
+	for (const [offset, freq, peak] of [
+		[0, 2600, 0.12],
+		[0.09, 1900, 0.16],
+	] as const) {
+		const click = audio.createBufferSource();
+		click.buffer = noiseBuffer(audio, 0.04, 6);
+
+		const filter = audio.createBiquadFilter();
+		filter.type = 'bandpass';
+		filter.frequency.value = freq;
+		filter.Q.value = 3;
+
+		const gain = audio.createGain();
+		const start = now + offset;
+		gain.gain.setValueAtTime(0.0001, start);
+		gain.gain.linearRampToValueAtTime(peak * scale, start + 0.001);
+		gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.05);
+
+		click.connect(filter);
+		filter.connect(gain);
+		gain.connect(master);
+		click.start(start);
+		click.stop(start + 0.06);
+	}
+}
+
+export function playHolster() {
+	const audio = ensureCtx();
+	if (!audio || !master) return;
+	const scale = voiceGainScale('holster');
+	if (scale <= 0) return;
+
+	const noise = audio.createBufferSource();
+	noise.buffer = noiseBuffer(audio, 0.18, 1.6);
+
+	const filter = audio.createBiquadFilter();
+	filter.type = 'lowpass';
+	filter.frequency.setValueAtTime(1400, audio.currentTime);
+	filter.frequency.exponentialRampToValueAtTime(400, audio.currentTime + 0.16);
+
+	const gain = audio.createGain();
+	envelope(gain, audio, 0.1 * scale, 0.004, 0.16);
+
+	noise.connect(filter);
+	filter.connect(gain);
+	gain.connect(master);
+	noise.start();
+	noise.stop(audio.currentTime + 0.2);
+}
