@@ -54,6 +54,7 @@ let yaw = 0;
 let pitch = 0;
 let recoil = 0;
 let recoilVelocity = 0;
+let snapAim = false;
 let flashTimer = 0;
 let flashSeed = 0;
 let running = false;
@@ -249,8 +250,11 @@ export function setViewmodelVisible(next: boolean) {
 	}
 }
 
-export function aimViewmodel(clientX: number, clientY: number) {
+// snap skips the easing: a touch tap has no hover to swing across from, so the
+// gun has to be pointing at the target on the very frame it fires
+export function aimViewmodel(clientX: number, clientY: number, snap = false) {
 	pointerNdc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+	if (snap) snapAim = true;
 	startLoop();
 }
 
@@ -294,9 +298,15 @@ function frame() {
 	scratch.copy(aimTarget).sub(rig!.position).normalize();
 	const targetPitch = Math.asin(THREE.MathUtils.clamp(scratch.y, -1, 1));
 	const targetYaw = Math.atan2(-scratch.x, -scratch.z);
-	const ease = Math.min(dt * AIM_EASE, 1);
-	pitch += (targetPitch - pitch) * ease;
-	yaw += shortestAngle(yaw, targetYaw) * ease;
+	if (snapAim) {
+		pitch = targetPitch;
+		yaw = targetYaw;
+		snapAim = false;
+	} else {
+		const ease = Math.min(dt * AIM_EASE, 1);
+		pitch += (targetPitch - pitch) * ease;
+		yaw += shortestAngle(yaw, targetYaw) * ease;
+	}
 
 	recoilVelocity += (-RECOIL_STIFFNESS * recoil - RECOIL_DAMPING * recoilVelocity) * dt;
 	recoil += recoilVelocity * dt;

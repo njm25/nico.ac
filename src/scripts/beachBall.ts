@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { initAudio, playBounce, playGrab, playRelease, playPop, playSpawn } from './sandboxAudio';
 import { getActiveTool } from './sandboxState';
+import { syncBalls } from './letterPhysics';
 
 interface Ball {
+	id: number;
 	mesh: THREE.Mesh;
 	velocity: THREE.Vector3;
 	angularVelocity: THREE.Vector3;
@@ -28,6 +30,7 @@ let clock: THREE.Clock | null = null;
 let animating = false;
 
 const balls: Ball[] = [];
+let nextBallId = 1;
 const particles: { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number }[] = [];
 
 let dragTarget: Ball | null = null;
@@ -366,12 +369,41 @@ function resolveBallCollisions() {
 	}
 }
 
+// beach balls live in three.js world units; shot letters live in a matter world
+// measured in viewport pixels. this converts one into the other each frame so a
+// rolling ball can plough through the letter pile.
+function syncBallProxies() {
+	if (!camera) return;
+	const { halfWidth, halfHeight } = getVisibleBounds();
+	const pxPerWorldX = window.innerWidth / (2 * halfWidth);
+	const pxPerWorldY = window.innerHeight / (2 * halfHeight);
+
+	syncBalls(
+		balls.map((ball) => {
+			const radius = ball.radius * pxPerWorldY;
+			// matter velocities are px per 60hz step, three's are units per second
+			const vx = (ball.velocity.x * pxPerWorldX) / 60;
+			return {
+				id: ball.id,
+				x: window.innerWidth / 2 + ball.mesh.position.x * pxPerWorldX,
+				y: window.innerHeight / 2 - ball.mesh.position.y * pxPerWorldY,
+				radius,
+				vx,
+				vy: (-ball.velocity.y * pxPerWorldY) / 60,
+				// rolling without slipping: clockwise on screen when moving right
+				spin: radius > 0 ? vx / radius : 0,
+			};
+		})
+	);
+}
+
 function animate() {
 	if (!animating) return;
 	requestAnimationFrame(animate);
 
 	const dt = Math.min(clock!.getDelta(), MAX_DT);
 	stepPhysics(dt);
+	syncBallProxies();
 	renderer!.render(scene!, camera!);
 
 	if (!balls.length && !particles.length) {
@@ -401,6 +433,7 @@ export function spawnBeachBall() {
 
 		scene!.add(mesh);
 		balls.push({
+			id: nextBallId++,
 			mesh,
 			velocity: new THREE.Vector3((Math.random() - 0.5) * 1.5, 0, 0),
 			angularVelocity: new THREE.Vector3(),

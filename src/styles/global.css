@@ -377,6 +377,13 @@ html[data-gun='armed'] #gun-reticle {
 	opacity: 0;
 }
 
+/* a whole svg icon shot loose as one body */
+.gun-debris-atom > svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
 /* holes sit in page coordinates so they stay stuck to the text they hit */
 #gun-holes {
 	position: absolute;

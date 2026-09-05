@@ -1,53 +1,44 @@
-import Matter from 'matter-js';
 import { initAudio, playGunshot, playCock, playHolster } from './sandboxAudio';
 import { tryPopAt } from './beachBall';
 import { setActiveTool } from './sandboxState';
 import { aimViewmodel, fireViewmodel, mountViewmodel, setViewmodelVisible } from './gunModel';
+import {
+	addLetters,
+	clearLetters,
+	ensurePhysics,
+	rebuildBounds,
+	shoveLetters,
+	wakeLetters,
+	type LetterSpawn,
+} from './letterPhysics';
 
-const { Bodies, Body, Composite, Engine, Sleeping } = Matter;
-
-interface Fragment {
-	el: HTMLElement;
-	body: Matter.Body;
-	settled: boolean;
-	width: number;
-	height: number;
-}
-
-// cached geometry for every splittable character, in page coordinates
+// cached geometry for every shootable piece: characters, plus whole svg icons,
+// which go in as single rigid bodies rather than being split up
 interface FragRect {
-	el: HTMLElement;
+	el: Element;
 	x: number;
 	y: number;
 	width: number;
 	height: number;
+	// coordinates are viewport-relative for pieces inside a fixed element (the
+	// footer) and page-relative for everything else
+	fixed: boolean;
 	shot: boolean;
 }
 
 const BLAST_RADIUS = 100;
-const MAX_FRAGMENTS = 700;
 const MAX_HOLES = 160;
-const WALL = 400;
-const STEP = 1000 / 60;
-const MAX_STEPS_PER_FRAME = 4;
 
 let armed = false;
-let engine: Matter.Engine | null = null;
-let bounds: Matter.Body[] = [];
 let debrisLayer: HTMLElement | null = null;
 let holeLayer: HTMLElement | null = null;
 let reticle: HTMLElement | null = null;
 
-const fragments: Fragment[] = [];
 let fragRects: FragRect[] = [];
+let fixedRoots: HTMLElement[] = [];
 let holeCount = 0;
 let splitDone = false;
 let originalWrapHtml = '';
-
-let running = false;
-let rafId = 0;
-let lastTime = 0;
-let accumulator = 0;
 let resizeTimer = 0;
 
 const reduceMotion = () =>
@@ -104,78 +95,6 @@ function kickReticle() {
 	reticle.classList.add('firing');
 }
 
-/* --------------------------------------------------------------- physics */
-
-function ensureEngine(): Matter.Engine {
-	if (engine) return engine;
-	// sleeping matters here: piles are permanent, so settled letters have to cost nothing
-	engine = Engine.create({ enableSleeping: true });
-	engine.gravity.y = 1;
-	buildBounds();
-	return engine;
-}
-
-function buildBounds() {
-	if (!engine) return;
-	if (bounds.length) Composite.remove(engine.world, bounds);
-
-	const w = window.innerWidth;
-	const h = window.innerHeight;
-	const options = { isStatic: true, restitution: 0.1, friction: 0.6 };
-
-	// thick, so a fast letter cannot tunnel through
-	bounds = [
-		Bodies.rectangle(w / 2, h + WALL / 2, w + WALL * 2, WALL, options),
-		Bodies.rectangle(-WALL / 2, h / 2, WALL, h * 3, options),
-		Bodies.rectangle(w + WALL / 2, h / 2, WALL, h * 3, options),
-	];
-	Composite.add(engine.world, bounds);
-}
-
-function startLoop() {
-	if (running) return;
-	running = true;
-	lastTime = 0;
-	accumulator = 0;
-	rafId = requestAnimationFrame(frame);
-}
-
-function frame(now: number) {
-	if (!running) return;
-	rafId = requestAnimationFrame(frame);
-
-	if (!lastTime) lastTime = now;
-	accumulator += Math.min(now - lastTime, 100);
-	lastTime = now;
-
-	let steps = 0;
-	while (accumulator >= STEP && steps < MAX_STEPS_PER_FRAME) {
-		Engine.update(engine!, STEP);
-		accumulator -= STEP;
-		steps++;
-	}
-	if (steps === MAX_STEPS_PER_FRAME) accumulator = 0;
-
-	syncFragments();
-
-	// everything has come to rest: park the loop until the next shot disturbs it
-	if (fragments.every((f) => f.settled)) {
-		running = false;
-		cancelAnimationFrame(rafId);
-	}
-}
-
-function syncFragments() {
-	for (const fragment of fragments) {
-		if (fragment.body.isSleeping && fragment.settled) continue;
-
-		const { x, y } = fragment.body.position;
-		fragment.el.style.transform =
-			`translate(${x - fragment.width / 2}px, ${y - fragment.height / 2}px) rotate(${fragment.body.angle}rad)`;
-		fragment.settled = fragment.body.isSleeping;
-	}
-}
-
 /* ----------------------------------------------------------------- split */
 
 function splitPage() {
@@ -185,6 +104,12 @@ function splitPage() {
 
 	// one snapshot of the whole content area is all undo needs
 	originalWrapHtml = wrap.innerHTML;
+
+	// cheap to collect now, while the page is still ~100 elements rather than
+	// the few thousand spans it becomes below
+	fixedRoots = Array.from(wrap.querySelectorAll<HTMLElement>('*')).filter(
+		(el) => getComputedStyle(el).position === 'fixed'
+	);
 
 	const walker = document.createTreeWalker(wrap, NodeFilter.SHOW_TEXT, {
 		acceptNode(node) {
@@ -217,6 +142,12 @@ function splitPage() {
 		parent.replaceChild(replacement, textNode);
 	}
 
+	// icons (github, linkedin, rss) have no text to split, so each whole svg
+	// becomes one shootable body
+	for (const icon of wrap.querySelectorAll('svg')) {
+		icon.classList.add('gun-frag', 'gun-atom');
+	}
+
 	splitDone = true;
 	measureFragments();
 }
@@ -229,15 +160,21 @@ function measureFragments() {
 	const scrollTop = window.scrollY;
 
 	fragRects = [];
-	for (const el of document.querySelectorAll<HTMLElement>('.gun-frag')) {
+	for (const el of document.querySelectorAll('.gun-frag')) {
 		const rect = el.getBoundingClientRect();
 		if (rect.width < 1 || rect.height < 1) continue;
+
+		// a fixed piece stays in viewport coordinates; folding scroll into it
+		// would leave the cached position wrong the moment the page moves
+		const fixed = fixedRoots.some((root) => root.contains(el));
+
 		fragRects.push({
 			el,
-			x: rect.left + scrollLeft + rect.width / 2,
-			y: rect.top + scrollTop + rect.height / 2,
+			x: rect.left + rect.width / 2 + (fixed ? 0 : scrollLeft),
+			y: rect.top + rect.height / 2 + (fixed ? 0 : scrollTop),
 			width: rect.width,
 			height: rect.height,
+			fixed,
 			shot: el.classList.contains('shot'),
 		});
 	}
@@ -257,111 +194,73 @@ function shoot(clientX: number, clientY: number) {
 	impact(clientX, clientY);
 	splitPage();
 	blast(clientX, clientY);
-	shoveDebris(clientX, clientY);
+	shoveLetters(clientX, clientY, BLAST_RADIUS);
 }
 
 function blast(clientX: number, clientY: number) {
 	if (!fragRects.length) return;
 
-	const originX = clientX + window.scrollX;
-	const originY = clientY + window.scrollY;
+	const pageX = clientX + window.scrollX;
+	const pageY = clientY + window.scrollY;
 
 	const hits: { rect: FragRect; dx: number; dy: number; distance: number }[] = [];
 	for (const rect of fragRects) {
 		if (rect.shot) continue;
-		const dx = rect.x - originX;
-		const dy = rect.y - originY;
+		const dx = rect.x - (rect.fixed ? clientX : pageX);
+		const dy = rect.y - (rect.fixed ? clientY : pageY);
 		const distance = Math.hypot(dx, dy);
 		if (distance <= BLAST_RADIUS) hits.push({ rect, dx, dy, distance });
 	}
 	if (!hits.length) return;
 
 	ensureLayers();
-	const world = ensureEngine().world;
 	const scrollLeft = window.scrollX;
 	const scrollTop = window.scrollY;
+	const spawns: LetterSpawn[] = [];
 
 	for (const { rect, dx, dy, distance } of hits) {
-		rect.shot = true;
-		rect.el.classList.add('shot');
-
 		const style = getComputedStyle(rect.el);
 		const el = document.createElement('span');
 		el.className = 'gun-debris-char';
-		el.textContent = rect.el.textContent;
 		el.style.width = `${rect.width}px`;
 		el.style.height = `${rect.height}px`;
-		el.style.lineHeight = `${rect.height}px`;
-		el.style.font = style.font;
 		el.style.color = style.color;
-		el.style.textTransform = style.textTransform;
-		debrisLayer!.appendChild(el);
 
-		// spawn in viewport space: debris piles at the bottom of the screen
-		const body = Bodies.rectangle(rect.x - scrollLeft, rect.y - scrollTop, rect.width, rect.height, {
-			restitution: 0.18,
-			friction: 0.55,
-			frictionAir: 0.012,
-			density: 0.0016,
-		});
+		if (rect.el.classList.contains('gun-atom')) {
+			// copy the icon before the original is hidden, or the copy inherits it
+			el.classList.add('gun-debris-atom');
+			const copy = rect.el.cloneNode(true) as Element;
+			copy.classList.remove('gun-frag', 'gun-atom', 'shot');
+			el.appendChild(copy);
+		} else {
+			el.textContent = rect.el.textContent;
+			el.style.lineHeight = `${rect.height}px`;
+			el.style.font = style.font;
+			el.style.textTransform = style.textTransform;
+		}
+
+		rect.shot = true;
+		rect.el.classList.add('shot');
+		debrisLayer!.appendChild(el);
 
 		const falloff = 1 - distance / BLAST_RADIUS;
 		const spread = distance < 0.5 ? Math.random() * Math.PI * 2 : Math.atan2(dy, dx);
 		const speed = (5 + falloff * 20) * (0.7 + Math.random() * 0.6);
 
-		Body.setVelocity(body, {
-			x: Math.cos(spread) * speed,
-			y: Math.sin(spread) * speed - falloff * 7,
+		// spawn in viewport space: debris piles at the bottom of the screen
+		spawns.push({
+			el,
+			x: rect.fixed ? rect.x : rect.x - scrollLeft,
+			y: rect.fixed ? rect.y : rect.y - scrollTop,
+			width: rect.width,
+			height: rect.height,
+			vx: Math.cos(spread) * speed,
+			vy: Math.sin(spread) * speed - falloff * 7,
+			spin: (Math.random() - 0.5) * 0.25,
 		});
-		Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.25);
-
-		Composite.add(world, body);
-		fragments.push({ el, body, settled: false, width: rect.width, height: rect.height });
 	}
 
-	cullFragments();
-	syncFragments();
-	startLoop();
-}
-
-// letters already lying in the pile are still fair game
-function shoveDebris(clientX: number, clientY: number) {
-	if (!fragments.length) return;
-	let disturbed = false;
-
-	for (const fragment of fragments) {
-		const dx = fragment.body.position.x - clientX;
-		const dy = fragment.body.position.y - clientY;
-		const distance = Math.hypot(dx, dy);
-		if (distance > BLAST_RADIUS) continue;
-
-		const falloff = 1 - distance / BLAST_RADIUS;
-		const spread = distance < 0.5 ? Math.random() * Math.PI * 2 : Math.atan2(dy, dx);
-		const speed = (4 + falloff * 15) * (0.7 + Math.random() * 0.6);
-
-		// setVelocity alone will not rouse a sleeping body
-		Sleeping.set(fragment.body, false);
-		Body.setVelocity(fragment.body, {
-			x: Math.cos(spread) * speed,
-			y: Math.sin(spread) * speed - falloff * 6,
-		});
-		Body.setAngularVelocity(fragment.body, (Math.random() - 0.5) * 0.3);
-		fragment.settled = false;
-		disturbed = true;
-	}
-
-	if (disturbed) startLoop();
-}
-
-function cullFragments() {
-	const excess = fragments.length - MAX_FRAGMENTS;
-	if (excess <= 0) return;
-
-	for (const fragment of fragments.splice(0, excess)) {
-		Composite.remove(engine!.world, fragment.body);
-		fragment.el.classList.add('fading');
-		setTimeout(() => fragment.el.remove(), 400);
-	}
+	addLetters(spawns);
 }
 
 /* --------------------------------------------------------------- effects */
@@ -429,6 +328,10 @@ function onPointerDown(e: PointerEvent) {
 
 	e.preventDefault();
 	e.stopPropagation();
+
+	// touch has no hover, so the tap itself is the only aim signal we ever get
+	moveReticle(e.clientX, e.clientY);
+	aimViewmodel(e.clientX, e.clientY, e.pointerType !== 'mouse');
 	shoot(e.clientX, e.clientY);
 }
 
@@ -449,12 +352,9 @@ function swallow(e: Event) {
 function onResize() {
 	clearTimeout(resizeTimer);
 	resizeTimer = window.setTimeout(() => {
-		buildBounds();
+		rebuildBounds();
 		measureFragments();
-		if (fragments.length) {
-			for (const fragment of fragments) fragment.settled = false;
-			startLoop();
-		}
+		wakeLetters();
 	}, 150);
 }
 
@@ -470,7 +370,7 @@ function arm() {
 	initAudio();
 	ensureLayers();
 	ensureReticle();
-	ensureEngine();
+	ensurePhysics();
 	mountViewmodel();
 
 	armed = true;
@@ -510,16 +410,7 @@ export function isGunArmed(): boolean {
 
 // undo: drop every fragment, every hole, and put the original markup back
 export function restorePage() {
-	running = false;
-	cancelAnimationFrame(rafId);
-
-	if (engine && fragments.length) {
-		Composite.remove(
-			engine.world,
-			fragments.map((f) => f.body)
-		);
-	}
-	fragments.length = 0;
+	clearLetters();
 
 	if (debrisLayer) debrisLayer.textContent = '';
 	if (holeLayer) holeLayer.textContent = '';
@@ -531,5 +422,6 @@ export function restorePage() {
 		splitDone = false;
 		originalWrapHtml = '';
 		fragRects = [];
+		fixedRoots = [];
 	}
 }
