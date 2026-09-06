@@ -49,10 +49,21 @@ const colour = () => PALETTE[colourIndex];
 
 function documentSize() {
 	const root = document.documentElement;
-	return {
-		width: Math.max(root.scrollWidth, window.innerWidth),
-		height: Math.max(root.scrollHeight, window.innerHeight),
+
+	// hide our own layer while measuring: it is absolutely positioned, so it
+	// counts toward scroll size and would otherwise ratchet bigger every resize
+	const visible = canvas && canvas.style.display !== 'none';
+	if (visible) canvas!.style.display = 'none';
+
+	// clientWidth, not innerWidth: innerWidth includes the scrollbar, and a
+	// canvas that wide overflows the content box and forces a horizontal one
+	const size = {
+		width: Math.max(root.scrollWidth, root.clientWidth),
+		height: Math.max(root.scrollHeight, root.clientHeight),
 	};
+
+	if (visible) canvas!.style.display = '';
+	return size;
 }
 
 function ensureCanvas() {
