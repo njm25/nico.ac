@@ -434,3 +434,64 @@ main.gun-shake {
 		animation: none;
 	}
 }
+
+/* ---------------------------------------------------------------- spray can */
+
+/* sized to the whole document so paint sticks to the page and scrolls with it.
+   below the beach ball canvas (-1) so balls roll over the paint */
+#spray-layer {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: -2;
+	pointer-events: none;
+}
+
+html.spray-on,
+html.spray-on * {
+	cursor: none !important;
+}
+
+html.spray-on body {
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+/* never animate transform or scale here: the inline transform carries the
+   position, and a scale would multiply it and fling the ring off screen */
+#spray-cursor {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: var(--nozzle);
+	height: var(--nozzle);
+	margin: calc(var(--nozzle) / -2) 0 0 calc(var(--nozzle) / -2);
+	border: 1px solid currentColor;
+	border-radius: 50%;
+	z-index: 10001;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.15s ease, box-shadow 0.12s ease;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.65);
+}
+
+html.spray-on #spray-cursor {
+	opacity: 0.85;
+}
+
+#spray-cursor.spraying {
+	opacity: 1;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.65), inset 0 0 18px -4px currentColor;
+}
+
+#spray-cursor::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 3px;
+	height: 3px;
+	margin: -1.5px 0 0 -1.5px;
+	border-radius: 50%;
+	background: currentColor;
+}

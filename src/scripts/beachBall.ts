@@ -143,8 +143,8 @@ function raycastBalls(x: number, y: number): Ball | null {
 }
 
 function onPointerDown(e: PointerEvent) {
-	// the gun owns the pointer while it's armed; dragging is off
-	if (getActiveTool() === 'gun') return;
+	// whichever pointer tool is active owns the pointer; dragging is off
+	if (getActiveTool() !== 'none') return;
 	if (!balls.length) return;
 	const hit = raycastBalls(e.clientX, e.clientY);
 	if (!hit) return;

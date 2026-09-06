@@ -315,3 +315,83 @@ export function playHolster() {
 	noise.start();
 	noise.stop(audio.currentTime + 0.2);
 }
+
+let sprayNoise: AudioBufferSourceNode | null = null;
+let sprayGain: GainNode | null = null;
+
+// a continuous hiss for as long as the button is held, rather than a one-shot
+export function startSprayHiss() {
+	const audio = ensureCtx();
+	if (!audio || !master || sprayNoise) return;
+
+	const noise = audio.createBufferSource();
+	noise.buffer = noiseBuffer(audio, 1, 0);
+	noise.loop = true;
+
+	const highpass = audio.createBiquadFilter();
+	highpass.type = 'highpass';
+	highpass.frequency.value = 1100;
+
+	const bandpass = audio.createBiquadFilter();
+	bandpass.type = 'bandpass';
+	bandpass.frequency.value = 4300;
+	bandpass.Q.value = 0.55;
+
+	const gain = audio.createGain();
+	gain.gain.setValueAtTime(0.0001, audio.currentTime);
+	gain.gain.linearRampToValueAtTime(0.055, audio.currentTime + 0.05);
+
+	noise.connect(highpass);
+	highpass.connect(bandpass);
+	bandpass.connect(gain);
+	gain.connect(master);
+	noise.start();
+
+	sprayNoise = noise;
+	sprayGain = gain;
+}
+
+export function stopSprayHiss() {
+	const audio = ensureCtx();
+	if (!audio || !sprayNoise || !sprayGain) return;
+
+	const now = audio.currentTime;
+	sprayGain.gain.cancelScheduledValues(now);
+	sprayGain.gain.setValueAtTime(Math.max(sprayGain.gain.value, 0.0001), now);
+	sprayGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+	sprayNoise.stop(now + 0.12);
+
+	sprayNoise = null;
+	sprayGain = null;
+}
+
+// the ball bearing rattling in the can
+export function playShake() {
+	const audio = ensureCtx();
+	if (!audio || !master) return;
+	const scale = voiceGainScale('shake');
+	if (scale <= 0) return;
+	const now = audio.currentTime;
+
+	for (let i = 0; i < 3; i++) {
+		const click = audio.createBufferSource();
+		click.buffer = noiseBuffer(audio, 0.05, 5);
+
+		const filter = audio.createBiquadFilter();
+		filter.type = 'bandpass';
+		filter.frequency.value = 2400 + Math.random() * 1800;
+		filter.Q.value = 2.5;
+
+		const gain = audio.createGain();
+		const start = now + i * (0.055 + Math.random() * 0.03);
+		gain.gain.setValueAtTime(0.0001, start);
+		gain.gain.linearRampToValueAtTime(0.13 * scale, start + 0.002);
+		gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.06);
+
+		click.connect(filter);
+		filter.connect(gain);
+		gain.connect(master);
+		click.start(start);
+		click.stop(start + 0.09);
+	}
+}

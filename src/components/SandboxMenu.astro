@@ -21,6 +21,14 @@
 				</svg>
 			</span>
 		</button>
+		<button class="sandbox-tool" id="sandbox-tool-spray" role="menuitem" aria-label="toggle spray paint" aria-pressed="false">
+			<span class="tool-icon spray-icon" aria-hidden="true">
+				<!-- "spray-can" from Font Awesome Free 6.7.2 - CC BY 4.0 - https://fontawesome.com/license/free -->
+				<svg viewBox="0 0 512 512" width="15" height="15" fill="currentColor">
+					<path d="M128 0l64 0c17.7 0 32 14.3 32 32l0 96L96 128l0-96c0-17.7 14.3-32 32-32zM0 256c0-53 43-96 96-96l128 0c53 0 96 43 96 96l0 208c0 26.5-21.5 48-48 48L48 512c-26.5 0-48-21.5-48-48L0 256zm240 80A80 80 0 1 0 80 336a80 80 0 1 0 160 0zM256 64a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zM384 32a32 32 0 1 1 0 64 32 32 0 1 1 0-64zm64 32a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zm32 64a32 32 0 1 1 0 64 32 32 0 1 1 0-64zM448 256a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zM384 128a32 32 0 1 1 0 64 32 32 0 1 1 0-64z" />
+				</svg>
+			</span>
+		</button>
 		<button class="sandbox-tool" id="sandbox-tool-undo" role="menuitem" aria-label="undo everything">
 			<span class="tool-icon undo-icon" aria-hidden="true">
 				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -174,6 +182,7 @@
 	}
 
 	.gun-icon,
+	.spray-icon,
 	.undo-icon {
 		color: inherit;
 	}
@@ -181,12 +190,14 @@
 
 <script type="module">
 	import { spawnBeachBall, clearBeachBalls } from '../scripts/beachBall';
-	import { toggleGun, restorePage } from '../scripts/gun';
+	import { toggleGun, restorePage, isGunArmed } from '../scripts/gun';
+	import { toggleSpray, clearPaint, isSprayOn } from '../scripts/spray';
 
 	const menu = document.getElementById('sandbox-menu');
 	const trigger = document.getElementById('sandbox-trigger');
 	const beachBallTool = document.getElementById('sandbox-tool-beachball');
 	const gunTool = document.getElementById('sandbox-tool-gun');
+	const sprayTool = document.getElementById('sandbox-tool-spray');
 	const undoTool = document.getElementById('sandbox-tool-undo');
 
 	function closeMenu() {
@@ -209,17 +220,35 @@
 		closeMenu();
 	});
 
+	function syncTool(tool, on) {
+		tool?.classList.toggle('active', on);
+		tool?.setAttribute('aria-pressed', on ? 'true' : 'false');
+	}
+
+	// the trigger keeps showing a tint while any pointer tool is live
+	function syncArmed() {
+		menu?.classList.toggle('armed', isGunArmed() || isSprayOn());
+	}
+
+	// only one pointer tool at a time, or they fight over pointerdown
 	gunTool?.addEventListener('click', () => {
-		const armed = toggleGun();
-		gunTool.classList.toggle('active', armed);
-		gunTool.setAttribute('aria-pressed', armed ? 'true' : 'false');
-		menu?.classList.toggle('armed', armed);
+		if (isSprayOn()) syncTool(sprayTool, toggleSpray());
+		syncTool(gunTool, toggleGun());
+		syncArmed();
+		closeMenu();
+	});
+
+	sprayTool?.addEventListener('click', () => {
+		if (isGunArmed()) syncTool(gunTool, toggleGun());
+		syncTool(sprayTool, toggleSpray());
+		syncArmed();
 		closeMenu();
 	});
 
 	undoTool?.addEventListener('click', () => {
 		clearBeachBalls();
 		restorePage();
+		clearPaint();
 		closeMenu();
 	});
 </script>
