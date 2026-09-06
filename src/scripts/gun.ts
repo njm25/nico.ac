@@ -1,7 +1,18 @@
 import { initAudio, playGunshot, playCock, playHolster } from './sandboxAudio';
-import { tryPopAt } from './beachBall';
+import { popBallsWithin, tryPopAt } from './beachBall';
 import { setActiveTool } from './sandboxState';
-import { aimViewmodel, fireViewmodel, mountViewmodel, setViewmodelVisible } from './gunModel';
+import {
+	aimViewmodel,
+	fireViewmodel,
+	launchRocket,
+	mountViewmodel,
+	nextWeapon,
+	setProjectileImpact,
+	setViewmodelVisible,
+	setWeapon,
+	weaponReady,
+	type WeaponName,
+} from './gunModel';
 import {
 	addLetters,
 	clearLetters,
@@ -26,12 +37,26 @@ interface FragRect {
 	shot: boolean;
 }
 
-const BLAST_RADIUS = 100;
+const BLAST_RADIUS = 40;
+// a shotgun scatters pellets across a cone much wider than a single hit, each
+// one punching its own small hole
+const SHOTGUN_PELLETS = 13;
+const SHOTGUN_SPREAD = 120;
+// the angle successive points on a sunflower spiral are separated by
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+// the rocket goes off at the radius everything used to have
+const RPG_RADIUS = 100;
 const MAX_HOLES = 160;
+// roughly 410 rounds per minute
+const AUTO_INTERVAL = 145;
 
 let armed = false;
+let weapon: WeaponName = 'pistol';
+let autoTimer = 0;
+let pointer = { x: 0, y: 0 };
 let debrisLayer: HTMLElement | null = null;
 let holeLayer: HTMLElement | null = null;
+let holeScroll: HTMLElement | null = null;
 let reticle: HTMLElement | null = null;
 
 let fragRects: FragRect[] = [];
@@ -53,12 +78,27 @@ function ensureLayers() {
 	debrisLayer.id = 'gun-debris';
 	debrisLayer.setAttribute('aria-hidden', 'true');
 
-	// bullet holes live in page coordinates so they stay stuck to the text they hit
+	// Bullet holes live in page coordinates so they stay stuck to the text they
+	// hit. The outer layer is fixed and clipped, because absolutely positioned
+	// holes count toward the document's scroll area and one near the right edge
+	// would widen the page; the inner wrapper carries the scroll offset instead.
 	holeLayer = document.createElement('div');
 	holeLayer.id = 'gun-holes';
 	holeLayer.setAttribute('aria-hidden', 'true');
 
+	holeScroll = document.createElement('div');
+	holeScroll.className = 'gun-holes-scroll';
+	holeLayer.appendChild(holeScroll);
+	window.addEventListener('scroll', syncHoleScroll, { passive: true });
+
 	document.body.append(holeLayer, debrisLayer);
+	syncHoleScroll();
+}
+
+function syncHoleScroll() {
+	if (holeScroll) {
+		holeScroll.style.transform = `translate(${-window.scrollX}px, ${-window.scrollY}px)`;
+	}
 }
 
 function ensureReticle() {
@@ -102,8 +142,12 @@ function splitPage() {
 	const wrap = document.querySelector<HTMLElement>('.wrap');
 	if (!wrap) return;
 
-	// one snapshot of the whole content area is all undo needs
-	originalWrapHtml = wrap.innerHTML;
+	// One snapshot of the whole content area is all undo needs. It is taken from
+	// a clone with the shake class stripped: shoot() adds that class before this
+	// runs, and restoring markup carrying it would replay the animation on undo.
+	const pristine = wrap.cloneNode(true) as HTMLElement;
+	pristine.querySelector('main')?.classList.remove('gun-shake');
+	originalWrapHtml = pristine.innerHTML;
 
 	// cheap to collect now, while the page is still ~100 elements rather than
 	// the few thousand spans it becomes below
@@ -183,21 +227,66 @@ function measureFragments() {
 /* ----------------------------------------------------------------- shoot */
 
 function shoot(clientX: number, clientY: number) {
-	playGunshot();
+	// a launcher with nothing in it does nothing at all: no report, no recoil
+	if (weapon === 'rpg' && !weaponReady()) return;
+
+	playGunshot(weapon);
 	fireViewmodel();
 	kickReticle();
 	shake();
 
+	if (weapon === 'rpg') {
+		// nothing happens here, not even to a ball under the cursor: the rocket
+		// has to get there first, and it takes everything out on arrival
+		launchRocket(clientX, clientY);
+		return;
+	}
+
 	// a ball in the way eats the bullet
 	if (tryPopAt(clientX, clientY)) return;
 
-	impact(clientX, clientY);
 	splitPage();
-	blast(clientX, clientY);
+
+	if (weapon === 'shotgun') {
+		// Pellets are laid out on a sunflower spiral rather than drawn at random:
+		// the golden angle keeps successive pellets as far apart as they can be,
+		// so the pattern covers the cone evenly instead of clumping the way pure
+		// chance does. The whole pattern is spun at random and each pellet is
+		// nudged off its station, so no two shots land the same.
+		const spin = Math.random() * Math.PI * 2;
+		for (let i = 0; i < SHOTGUN_PELLETS; i++) {
+			// sqrt spreads the rings evenly over the area of the cone rather than
+			// over its width, which would bunch them at the middle
+			const ring = Math.sqrt((i + 0.5) / SHOTGUN_PELLETS);
+			const distance = ring * SHOTGUN_SPREAD * (1 + (Math.random() - 0.5) * 0.22);
+			const angle = spin + i * GOLDEN_ANGLE + (Math.random() - 0.5) * 0.55;
+			const pelletX = clientX + Math.cos(angle) * distance;
+			const pelletY = clientY + Math.sin(angle) * distance;
+
+			impact(pelletX, pelletY);
+			blast(pelletX, pelletY, BLAST_RADIUS);
+			shoveLetters(pelletX, pelletY, BLAST_RADIUS);
+		}
+		return;
+	}
+
+	impact(clientX, clientY);
+	blast(clientX, clientY, BLAST_RADIUS);
 	shoveLetters(clientX, clientY, BLAST_RADIUS);
 }
 
-function blast(clientX: number, clientY: number) {
+// the rocket has landed: this is where an rpg shot actually does its damage
+function detonate(clientX: number, clientY: number) {
+	playGunshot('explosion');
+	shake();
+	splitPage();
+	impact(clientX, clientY, 'scorch');
+	popBallsWithin(clientX, clientY, RPG_RADIUS);
+	blast(clientX, clientY, RPG_RADIUS);
+	shoveLetters(clientX, clientY, RPG_RADIUS);
+}
+
+function blast(clientX: number, clientY: number, radius: number) {
 	if (!fragRects.length) return;
 
 	const pageX = clientX + window.scrollX;
@@ -209,7 +298,7 @@ function blast(clientX: number, clientY: number) {
 		const dx = rect.x - (rect.fixed ? clientX : pageX);
 		const dy = rect.y - (rect.fixed ? clientY : pageY);
 		const distance = Math.hypot(dx, dy);
-		if (distance <= BLAST_RADIUS) hits.push({ rect, dx, dy, distance });
+		if (distance <= radius) hits.push({ rect, dx, dy, distance });
 	}
 	if (!hits.length) return;
 
@@ -243,7 +332,7 @@ function blast(clientX: number, clientY: number) {
 		rect.el.classList.add('shot');
 		debrisLayer!.appendChild(el);
 
-		const falloff = 1 - distance / BLAST_RADIUS;
+		const falloff = 1 - distance / radius;
 		const spread = distance < 0.5 ? Math.random() * Math.PI * 2 : Math.atan2(dy, dx);
 		const speed = (5 + falloff * 20) * (0.7 + Math.random() * 0.6);
 
@@ -305,17 +394,46 @@ function makeHole(): HTMLElement {
 	return hole;
 }
 
-function impact(clientX: number, clientY: number) {
+// a much bigger, sootier mark than a bullet hole: no clean rim, just a burnt
+// patch with debris thrown outward from the centre
+function makeScorch(): HTMLElement {
+	const scorch = document.createElement('span');
+	scorch.className = 'gun-scorch';
+
+	const streaks: string[] = [];
+	const count = 16 + Math.floor(Math.random() * 8);
+	for (let i = 0; i < count; i++) {
+		const angle = (i / count) * Math.PI * 2 + Math.random() * 0.45;
+		const inner = 11 + Math.random() * 9;
+		const outer = inner + 7 + Math.random() * 22;
+		streaks.push(
+			`M${(50 + Math.cos(angle) * inner).toFixed(1)} ${(50 + Math.sin(angle) * inner).toFixed(1)}` +
+				`L${(50 + Math.cos(angle) * outer).toFixed(1)} ${(50 + Math.sin(angle) * outer).toFixed(1)}`
+		);
+	}
+
+	scorch.innerHTML = `
+<svg viewBox="0 0 100 100" width="100" height="100">
+	<g stroke="rgba(8,8,10,0.5)" stroke-width="2.6" stroke-linecap="round" fill="none">
+		<path d="${streaks.join(' ')}" />
+	</g>
+	<circle cx="50" cy="50" r="16" fill="rgba(5,6,10,0.8)" />
+	<circle cx="50" cy="50" r="9" fill="#000" />
+</svg>`;
+	return scorch;
+}
+
+function impact(clientX: number, clientY: number, kind: 'hole' | 'scorch' = 'hole') {
 	ensureLayers();
 	const x = clientX + window.scrollX;
 	const y = clientY + window.scrollY;
 
-	const hole = makeHole();
+	const hole = kind === 'scorch' ? makeScorch() : makeHole();
 	hole.style.transform = `translate(${x}px, ${y}px) rotate(${Math.random() * 360}deg)`;
-	holeLayer!.appendChild(hole);
+	holeScroll!.appendChild(hole);
 
 	if (++holeCount > MAX_HOLES) {
-		holeLayer!.querySelector('.gun-hole')?.remove();
+		holeScroll!.querySelector('.gun-hole, .gun-scorch')?.remove();
 		holeCount--;
 	}
 }
@@ -330,15 +448,36 @@ function onPointerDown(e: PointerEvent) {
 	e.stopPropagation();
 
 	// touch has no hover, so the tap itself is the only aim signal we ever get
+	pointer = { x: e.clientX, y: e.clientY };
 	moveReticle(e.clientX, e.clientY);
 	aimViewmodel(e.clientX, e.clientY, e.pointerType !== 'mouse');
 	shoot(e.clientX, e.clientY);
+
+	// the rifle keeps firing at wherever the pointer is until it is released
+	if (weapon === 'rifle') {
+		stopAuto();
+		autoTimer = window.setInterval(() => shoot(pointer.x, pointer.y), AUTO_INTERVAL);
+	}
+}
+
+function stopAuto() {
+	if (!autoTimer) return;
+	clearInterval(autoTimer);
+	autoTimer = 0;
 }
 
 function onPointerMove(e: PointerEvent) {
 	if (!armed) return;
+	pointer = { x: e.clientX, y: e.clientY };
 	moveReticle(e.clientX, e.clientY);
 	aimViewmodel(e.clientX, e.clientY);
+}
+
+function onContextMenu(e: MouseEvent) {
+	if (!armed) return;
+	e.preventDefault();
+	e.stopPropagation();
+	switchWeapon();
 }
 
 // preventDefault on pointerdown does not reliably stop a link from navigating
@@ -371,7 +510,9 @@ function arm() {
 	ensureLayers();
 	ensureReticle();
 	ensurePhysics();
+	setProjectileImpact(detonate);
 	mountViewmodel();
+	setWeapon(weapon);
 
 	armed = true;
 	setActiveTool('gun');
@@ -379,10 +520,15 @@ function arm() {
 	setViewmodelVisible(true);
 
 	window.addEventListener('pointerdown', onPointerDown, { capture: true });
+	window.addEventListener('pointerup', stopAuto, { capture: true });
+	window.addEventListener('pointercancel', stopAuto, { capture: true });
+	// a pointerup released outside the window never arrives, so bail on blur too
+	window.addEventListener('blur', stopAuto);
 	window.addEventListener('pointermove', onPointerMove, { capture: true });
 	window.addEventListener('click', swallow, { capture: true });
 	window.addEventListener('auxclick', swallow, { capture: true });
 	window.addEventListener('dragstart', swallow, { capture: true });
+	window.addEventListener('contextmenu', onContextMenu, { capture: true });
 	window.addEventListener('resize', onResize);
 
 	playCock();
@@ -390,15 +536,20 @@ function arm() {
 
 function disarm() {
 	armed = false;
+	stopAuto();
 	setActiveTool('none');
 	delete document.documentElement.dataset.gun;
 	setViewmodelVisible(false);
 
 	window.removeEventListener('pointerdown', onPointerDown, { capture: true });
+	window.removeEventListener('pointerup', stopAuto, { capture: true });
+	window.removeEventListener('pointercancel', stopAuto, { capture: true });
+	window.removeEventListener('blur', stopAuto);
 	window.removeEventListener('pointermove', onPointerMove, { capture: true });
 	window.removeEventListener('click', swallow, { capture: true });
 	window.removeEventListener('auxclick', swallow, { capture: true });
 	window.removeEventListener('dragstart', swallow, { capture: true });
+	window.removeEventListener('contextmenu', onContextMenu, { capture: true });
 	window.removeEventListener('resize', onResize);
 
 	playHolster();
@@ -408,12 +559,23 @@ export function isGunArmed(): boolean {
 	return armed;
 }
 
+// right click on the tool racks the other weapon; safe to call while holstered,
+// the viewmodel just records it until the gun is next drawn
+export function switchWeapon(): WeaponName {
+	weapon = nextWeapon(weapon);
+	setWeapon(weapon);
+	stopAuto();
+	playCock();
+	window.dispatchEvent(new CustomEvent('sandbox:weapon', { detail: weapon }));
+	return weapon;
+}
+
 // undo: drop every fragment, every hole, and put the original markup back
 export function restorePage() {
 	clearLetters();
 
 	if (debrisLayer) debrisLayer.textContent = '';
-	if (holeLayer) holeLayer.textContent = '';
+	if (holeScroll) holeScroll.textContent = '';
 	holeCount = 0;
 
 	if (splitDone) {

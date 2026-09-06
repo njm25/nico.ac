@@ -198,12 +198,78 @@ function noiseBuffer(audio: AudioContext, seconds: number, decay: number): Audio
 	return buffer;
 }
 
-export function playGunshot() {
+// the rifle report is brighter and much shorter: it has to repeat ten times a
+// second without smearing into a single wall of low end
+const SHOT_PROFILES = {
+	pistol: {
+		peak: 0.5,
+		open: 9000,
+		close: 600,
+		sweep: 0.18,
+		decay: 0.22,
+		bodyFrom: 120,
+		bodyTo: 42,
+		bodyPeak: 0.34,
+		bodyDecay: 0.18,
+		tail: 0.07,
+	},
+	rpg: {
+		peak: 0.34,
+		open: 4200,
+		close: 260,
+		sweep: 0.3,
+		decay: 0.36,
+		bodyFrom: 210,
+		bodyTo: 60,
+		bodyPeak: 0.26,
+		bodyDecay: 0.3,
+		tail: 0.06,
+	},
+	explosion: {
+		peak: 0.6,
+		open: 5200,
+		close: 150,
+		sweep: 0.42,
+		decay: 0.6,
+		bodyFrom: 80,
+		bodyTo: 22,
+		bodyPeak: 0.55,
+		bodyDecay: 0.5,
+		tail: 0.16,
+	},
+	shotgun: {
+		peak: 0.55,
+		open: 7000,
+		close: 380,
+		sweep: 0.24,
+		decay: 0.32,
+		bodyFrom: 100,
+		bodyTo: 32,
+		bodyPeak: 0.44,
+		bodyDecay: 0.26,
+		tail: 0.11,
+	},
+	rifle: {
+		peak: 0.4,
+		open: 13000,
+		close: 1100,
+		sweep: 0.09,
+		decay: 0.12,
+		bodyFrom: 165,
+		bodyTo: 70,
+		bodyPeak: 0.2,
+		bodyDecay: 0.09,
+		tail: 0.04,
+	},
+} as const;
+
+export function playGunshot(profile: keyof typeof SHOT_PROFILES = 'pistol') {
 	const audio = ensureCtx();
 	if (!audio || !master) return;
 	const scale = voiceGainScale('gunshot');
 	if (scale <= 0) return;
 	const now = audio.currentTime;
+	const shot = SHOT_PROFILES[profile];
 
 	// crack: bright noise burst swept down hard, the part that reads as "gun"
 	const crack = audio.createBufferSource();
@@ -211,12 +277,12 @@ export function playGunshot() {
 
 	const crackFilter = audio.createBiquadFilter();
 	crackFilter.type = 'lowpass';
-	crackFilter.frequency.setValueAtTime(9000, now);
-	crackFilter.frequency.exponentialRampToValueAtTime(600, now + 0.18);
+	crackFilter.frequency.setValueAtTime(shot.open, now);
+	crackFilter.frequency.exponentialRampToValueAtTime(shot.close, now + shot.sweep);
 	crackFilter.Q.value = 1.2;
 
 	const crackGain = audio.createGain();
-	envelope(crackGain, audio, 0.5 * scale, 0.001, 0.22);
+	envelope(crackGain, audio, shot.peak * scale, 0.001, shot.decay);
 
 	crack.connect(crackFilter);
 	crackFilter.connect(crackGain);
@@ -228,11 +294,11 @@ export function playGunshot() {
 	const body = audio.createOscillator();
 	const bodyGain = audio.createGain();
 	body.type = 'sine';
-	body.frequency.setValueAtTime(120, now);
-	body.frequency.exponentialRampToValueAtTime(42, now + 0.16);
+	body.frequency.setValueAtTime(shot.bodyFrom, now);
+	body.frequency.exponentialRampToValueAtTime(shot.bodyTo, now + shot.bodyDecay);
 	body.connect(bodyGain);
 	bodyGain.connect(master);
-	envelope(bodyGain, audio, 0.34 * scale, 0.001, 0.18);
+	envelope(bodyGain, audio, shot.bodyPeak * scale, 0.001, shot.bodyDecay);
 	body.start(now);
 	body.stop(now + 0.24);
 
@@ -248,7 +314,7 @@ export function playGunshot() {
 	const tailGain = audio.createGain();
 	const tailStart = now + 0.05;
 	tailGain.gain.setValueAtTime(0.0001, tailStart);
-	tailGain.gain.linearRampToValueAtTime(0.07 * scale, tailStart + 0.01);
+	tailGain.gain.linearRampToValueAtTime(shot.tail * scale, tailStart + 0.01);
 	tailGain.gain.exponentialRampToValueAtTime(0.0001, tailStart + 0.22);
 
 	tail.connect(tailFilter);

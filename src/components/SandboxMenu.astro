@@ -13,7 +13,7 @@
 		<button class="sandbox-tool" id="sandbox-tool-beachball" role="menuitem" aria-label="spawn beach ball">
 			<span class="tool-icon beachball-icon"></span>
 		</button>
-		<button class="sandbox-tool" id="sandbox-tool-gun" role="menuitem" aria-label="toggle gun" aria-pressed="false">
+		<button class="sandbox-tool" id="sandbox-tool-gun" role="menuitem" aria-label="toggle pistol" aria-pressed="false" data-weapon="pistol">
 			<span class="tool-icon gun-icon" aria-hidden="true">
 				<!-- "gun" from Font Awesome Free 6.7.2 - CC BY 4.0 - https://fontawesome.com/license/free -->
 				<svg viewBox="0 0 576 512" width="17" height="15" fill="currentColor">
@@ -186,6 +186,7 @@
 	.undo-icon {
 		color: inherit;
 	}
+
 </style>
 
 <script type="module">
@@ -231,6 +232,14 @@
 	}
 
 	// only one pointer tool at a time, or they fight over pointerdown
+	function showWeapon(weapon) {
+		gunTool.dataset.weapon = weapon;
+		gunTool.setAttribute('aria-label', 'toggle ' + weapon);
+	}
+
+	// gun.ts owns right click while the gun is drawn, and announces the swap
+	window.addEventListener('sandbox:weapon', (e) => showWeapon(e.detail));
+
 	gunTool?.addEventListener('click', () => {
 		if (isSprayOn()) syncTool(sprayTool, toggleSpray());
 		syncTool(gunTool, toggleGun());

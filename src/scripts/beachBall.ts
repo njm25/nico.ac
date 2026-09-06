@@ -16,7 +16,13 @@ const GRAVITY = -9.8;
 const RESTITUTION = 0.62;
 const GROUND_FRICTION = 0.985;
 const AIR_DAMPING = 0.999;
-const MAX_DT = 1 / 30;
+// Fixed simulation step. Clamping a variable delta instead made the whole
+// simulation run slow whenever the frame rate dipped: at 20fps a 50ms frame was
+// clamped to 33ms, so the balls advanced at two thirds speed and felt floaty.
+// Now a slow frame just takes more steps and real time is preserved.
+const STEP = 1 / 60;
+const MAX_STEPS_PER_FRAME = 5;
+const MAX_FRAME = 0.25;
 const BALL_RADIUS = 0.55;
 const DRAG_THRESHOLD = 6;
 const BOUNCE_SOUND_MIN_SPEED = 0.5;
@@ -28,9 +34,11 @@ let canvas: HTMLCanvasElement | null = null;
 let ballTexture: THREE.CanvasTexture | null = null;
 let clock: THREE.Clock | null = null;
 let animating = false;
+let accumulator = 0;
 let footerCanvas: HTMLCanvasElement | null = null;
 let footerCtx: CanvasRenderingContext2D | null = null;
 let footerRect: DOMRect | null = null;
+let footerHasContent = false;
 
 const balls: Ball[] = [];
 let nextBallId = 1;
@@ -154,13 +162,47 @@ function measureFooter() {
 	footerCanvas.height = Math.max(Math.round(footerRect.height * pixelRatio), 1);
 }
 
+function ballsOverFooter(): boolean {
+	if (!footerRect || !camera) return false;
+	const { halfWidth, halfHeight } = getVisibleBounds();
+	const pxPerWorldX = window.innerWidth / (2 * halfWidth);
+	const pxPerWorldY = window.innerHeight / (2 * halfHeight);
+
+	for (const ball of balls) {
+		const radius = ball.radius * pxPerWorldY;
+		const x = window.innerWidth / 2 + ball.mesh.position.x * pxPerWorldX;
+		const y = window.innerHeight / 2 - ball.mesh.position.y * pxPerWorldY;
+		if (
+			y + radius >= footerRect.top &&
+			y - radius <= footerRect.bottom &&
+			x + radius >= footerRect.left &&
+			x - radius <= footerRect.right
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
 function drawFooterCopy() {
 	if (!footerCtx || !footerCanvas || !canvas) return;
 	if (!footerRect) measureFooter();
 	if (!footerRect) return;
 
-	footerCtx.clearRect(0, 0, footerCanvas.width, footerCanvas.height);
 	if (footerRect.width < 1 || footerRect.height < 1) return;
+
+	// copying the render every frame is wasted work whenever nothing is down
+	// there; clear once on the way out and then leave the canvas alone
+	if (!ballsOverFooter()) {
+		if (footerHasContent) {
+			footerCtx.clearRect(0, 0, footerCanvas.width, footerCanvas.height);
+			footerHasContent = false;
+		}
+		return;
+	}
+
+	footerCtx.clearRect(0, 0, footerCanvas.width, footerCanvas.height);
+	footerHasContent = true;
 
 	const pixelRatio = renderer!.getPixelRatio();
 	footerCtx.drawImage(
@@ -281,6 +323,31 @@ export function tryPopAt(clientX: number, clientY: number): boolean {
 	popBall(hit);
 	startAnimating();
 	return true;
+}
+
+// everything caught in a blast goes at once, measured on screen so the radius
+// matches the one the page damage uses
+export function popBallsWithin(clientX: number, clientY: number, radius: number): number {
+	if (!balls.length || !camera) return 0;
+
+	const { halfWidth, halfHeight } = getVisibleBounds();
+	const pxPerWorldX = window.innerWidth / (2 * halfWidth);
+	const pxPerWorldY = window.innerHeight / (2 * halfHeight);
+
+	const caught = balls.filter((ball) => {
+		const x = window.innerWidth / 2 + ball.mesh.position.x * pxPerWorldX;
+		const y = window.innerHeight / 2 - ball.mesh.position.y * pxPerWorldY;
+		// a ball counts as hit when the blast reaches any part of it
+		return Math.hypot(x - clientX, y - clientY) <= radius + ball.radius * pxPerWorldY;
+	});
+
+	for (const ball of caught) {
+		if (dragTarget === ball) dragTarget = null;
+		popBall(ball);
+	}
+
+	if (caught.length) startAnimating();
+	return caught.length;
 }
 
 function popBall(ball: Ball) {
@@ -470,8 +537,16 @@ function animate() {
 	if (!animating) return;
 	requestAnimationFrame(animate);
 
-	const dt = Math.min(clock!.getDelta(), MAX_DT);
-	stepPhysics(dt);
+	accumulator += Math.min(clock!.getDelta(), MAX_FRAME);
+
+	let steps = 0;
+	while (accumulator >= STEP && steps < MAX_STEPS_PER_FRAME) {
+		stepPhysics(STEP);
+		accumulator -= STEP;
+		steps++;
+	}
+	if (steps === MAX_STEPS_PER_FRAME) accumulator = 0;
+
 	syncBallProxies();
 	renderer!.render(scene!, camera!);
 	drawFooterCopy();
@@ -484,6 +559,7 @@ function animate() {
 function startAnimating() {
 	if (animating) return;
 	animating = true;
+	accumulator = 0;
 	clock!.getDelta();
 	animate();
 }
