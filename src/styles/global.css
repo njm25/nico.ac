@@ -495,3 +495,31 @@ html.spray-on #spray-cursor {
 	border-radius: 50%;
 	background: currentColor;
 }
+
+/* The beach balls render behind the page text, but the footer is a fixed opaque
+   bar painted above that text, so one layer cannot satisfy both. This canvas
+   holds a second copy of the ball render clipped to the footer, sitting between
+   the footer's background and its own text. */
+.beachball-footer-layer,
+.spray-footer-layer {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+/* explicit order inside the footer, matching the rest of the page:
+   background < paint < beach balls < the footer's own text */
+.spray-footer-layer {
+	z-index: 0;
+}
+
+.beachball-footer-layer {
+	z-index: 1;
+}
+
+footer > span {
+	position: relative;
+	z-index: 2;
+}

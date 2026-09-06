@@ -1,0 +1,15 @@
+---
+title: updates updates updates
+description: just some updates about the stuff ive been working on
+date: 2026-09-06
+---
+
+okay so ive been going bullish on three projects at the same time. its fun. i like to build. lets talk about [the film archive](https://thefilmarchive.org)
+
+so yeah basically i made some major improvements. i finally setup the email service using aws ses. it was nice and easy. implemented a few extra things too like the forgot password workflow. but the main overhaul was of the home screen and the film list screen. so the home screen now has a few different categories. theres 'popular' which is which films are viewed the most, by logged in users or non logged in users, doesnt matter. then theres 'recently added'. simple enough. and for signed in users they now have 'continue watching' and 'suggested'. im now tracking users progress in the films they watch and allow them to resume the film where they left off. once they finish a film it disappears from this list. the suggested list is just films of the same genre of what the user has recently watched. the film list page has been given infinite scroll, instead of paginated. i also added new filters and order by options. and theres a cool skeleton when searching and it makes it feel nice and responsive. the film detail page also had changes too. dropped the sources route and instead am opting to just render the selected source directly on the film page. less clicks for the user is always good. prettied up the details and reorganized the page as well. also, now you can click directors and actors to view which films theyve been in (thats also available on the site). oh! and closed captioning support!!
+
+[nicos jobs](https://nicosjobs.com) also got some good updates. well, mostly just getting it hosted finally. as of writing this, i havent started any scrapers in production. im currently working on refining the scraper fleet so that its more production ready. i will say that this aws bill is gonna be big so hopefully the site takes off and starts making me some money lol. besides hosting i gated some in progress stuff behind a sys admin for the time being, just so the site could be hosted without these incomplete features. i made some minor changes to the job detail card, and also added a list view for the job tracker. i guess the biggest change other than hosting it was the addition of job category matching. it makes finding jobs a little easier i hope, so that users dont just have to search in the search bar for a matching title.
+
+and finally, this website youre using right now has also been updated. i added some cool little easter eggs in the sidebar. beach balls, a gun, and a spray can. hover over the little hamburger icon on the left to use them
+
+anyways, thx again for reading the blog. looking forward to continuing to post here. also, i am gonna make a post soon about my home server which is lots of fun, expect to see some zomboid and minecraft screenshots <span class="no-lowercase">:D</span>

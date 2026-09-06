@@ -1,0 +1,18 @@
+/* Injected into the host page itself, via chrome.scripting.insertCSS so strict
+   site CSP cannot block it. Everything else the extension draws lives in a
+   shadow root and is styled there. */
+
+/* a shot character keeps its box, so the surrounding text never reflows */
+.pgs-shot {
+	visibility: hidden !important;
+}
+
+html.pgs-armed,
+html.pgs-armed * {
+	cursor: none !important;
+}
+
+html.pgs-armed body {
+	-webkit-user-select: none !important;
+	user-select: none !important;
+}

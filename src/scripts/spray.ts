@@ -12,6 +12,11 @@ const NOZZLE_RADIUS = 19;
 // holding still keeps building instead of stopping dead
 const DOTS_PER_STEP = 10;
 const DOTS_PER_DWELL = 26;
+// a fast pass sprays a tighter line: the nozzle is unchanged, but the faint
+// outer edge of the cone stops landing densely enough to register
+const SPEED_NARROWING = 0.35;
+const MIN_RADIUS_SCALE = 0.12;
+const RADIUS_SMOOTHING = 0.35;
 const DOT_ALPHA = 0.055;
 const STEP_SPACING = 3;
 
@@ -32,11 +37,15 @@ let active = false;
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 let cursor: HTMLElement | null = null;
+let footerCanvas: HTMLCanvasElement | null = null;
+let footerCtx: CanvasRenderingContext2D | null = null;
 
 let colourIndex = 0;
 let spraying = false;
 let pointer = { x: 0, y: 0 };
 let previous: { x: number; y: number } | null = null;
+let lastMove = 0;
+let radiusScale = 1;
 
 const density = new Map<string, number>();
 const drips: Drip[] = [];
@@ -74,6 +83,55 @@ function ensureCanvas() {
 	canvas.setAttribute('aria-hidden', 'true');
 	document.body.appendChild(canvas);
 	sizeCanvas();
+	ensureFooterLayer();
+	// the footer is fixed, so scrolling changes which slice of the page it covers
+	window.addEventListener('scroll', drawFooterCopy, { passive: true });
+}
+
+// The paint canvas sits behind the beach balls, which puts it behind the fixed
+// footer's opaque background too. This is the same fix the balls use: a second
+// copy of the paint, clipped to the footer, layered above its background.
+function ensureFooterLayer() {
+	if (footerCanvas) return;
+	const footer = document.querySelector('footer');
+	if (!footer) return;
+
+	footerCanvas = document.createElement('canvas');
+	footerCanvas.className = 'spray-footer-layer';
+	footerCanvas.setAttribute('aria-hidden', 'true');
+	footer.insertBefore(footerCanvas, footer.firstChild);
+	footerCtx = footerCanvas.getContext('2d');
+	sizeFooterLayer();
+}
+
+function sizeFooterLayer() {
+	const footer = document.querySelector('footer');
+	if (!footer || !footerCanvas) return;
+	const ratio = Math.min(window.devicePixelRatio, 2);
+	footerCanvas.width = Math.max(Math.round(footer.clientWidth * ratio), 1);
+	footerCanvas.height = Math.max(Math.round(footer.clientHeight * ratio), 1);
+}
+
+function drawFooterCopy() {
+	const footer = document.querySelector('footer');
+	if (!footer || !footerCtx || !footerCanvas || !canvas) return;
+
+	footerCtx.clearRect(0, 0, footerCanvas.width, footerCanvas.height);
+
+	// inset:0 covers the padding box, and the paint canvas is in page space
+	const box = footer.getBoundingClientRect();
+	const ratio = Math.min(window.devicePixelRatio, 2);
+	footerCtx.drawImage(
+		canvas,
+		(box.left + footer.clientLeft + window.scrollX) * ratio,
+		(box.top + footer.clientTop + window.scrollY) * ratio,
+		footer.clientWidth * ratio,
+		footer.clientHeight * ratio,
+		0,
+		0,
+		footerCanvas.width,
+		footerCanvas.height
+	);
 }
 
 // resizing a canvas wipes it, so the old paint is copied across by hand
@@ -119,16 +177,17 @@ function ensureCursor() {
 
 // airbrush: scatter low-alpha dots with a bias toward the middle, so passes
 // build up gradually instead of laying down a hard disc
-function spray(x: number, y: number, dots: number) {
-	if (!ctx) return;
+function spray(x: number, y: number, dots: number, radiusScale = 1) {
+	if (!ctx || dots <= 0) return;
 	ctx.fillStyle = colour();
+	const radius = NOZZLE_RADIUS * radiusScale;
 
 	for (let i = 0; i < dots; i++) {
 		const angle = Math.random() * Math.PI * 2;
-		const spread = Math.sqrt(Math.random()) * NOZZLE_RADIUS;
+		const spread = Math.sqrt(Math.random()) * radius;
 		const dotX = x + Math.cos(angle) * spread;
 		const dotY = y + Math.sin(angle) * spread;
-		const fade = 1 - spread / NOZZLE_RADIUS;
+		const fade = 1 - spread / radius;
 
 		ctx.globalAlpha = DOT_ALPHA * (0.35 + fade);
 		ctx.beginPath();
@@ -206,10 +265,14 @@ function frame(now: number) {
 	const dt = Math.min(now - lastFrame, 50);
 	lastFrame = now;
 
-	// dwell: keep laying paint down even when the pointer is not moving
-	if (spraying && previous) spray(previous.x, previous.y, DOTS_PER_DWELL);
+	// dwell: a stationary can sprays its full cone
+	if (spraying && previous) {
+		radiusScale += (1 - radiusScale) * RADIUS_SMOOTHING;
+		spray(previous.x, previous.y, DOTS_PER_DWELL, radiusScale);
+	}
 
 	advanceDrips(dt);
+	if (drips.length) drawFooterCopy();
 
 	if (!spraying && !drips.length) {
 		running = false;
@@ -234,8 +297,9 @@ function onPointerDown(e: PointerEvent) {
 
 	spraying = true;
 	previous = null;
+	radiusScale = 1;
 	pointer = { x: e.clientX, y: e.clientY };
-	strokeTo(pointer.x + window.scrollX, pointer.y + window.scrollY);
+	strokeTo(pointer.x + window.scrollX, pointer.y + window.scrollY, performance.now());
 	cursor?.classList.add('spraying');
 	startSprayHiss();
 	startLoop();
@@ -245,25 +309,36 @@ function onPointerMove(e: PointerEvent) {
 	if (!active) return;
 	pointer = { x: e.clientX, y: e.clientY };
 	moveCursor();
-	if (spraying) strokeTo(pointer.x + window.scrollX, pointer.y + window.scrollY);
+	if (spraying) strokeTo(pointer.x + window.scrollX, pointer.y + window.scrollY, performance.now());
 }
 
 // walk along the stroke so a fast drag does not leave gaps, and so a stroke
 // that begins and ends inside a single frame still leaves a mark
-function strokeTo(x: number, y: number) {
+function strokeTo(x: number, y: number, now: number) {
 	if (!previous) {
 		spray(x, y, DOTS_PER_STEP);
 		previous = { x, y };
+		lastMove = now;
 		return;
 	}
 
 	const dx = x - previous.x;
 	const dy = y - previous.y;
-	const steps = Math.max(Math.floor(Math.hypot(dx, dy) / STEP_SPACING), 1);
+	const distance = Math.hypot(dx, dy);
+	const steps = Math.min(Math.max(Math.floor(distance / STEP_SPACING), 1), 240);
+
+	// px per ms; smoothed, or the line width flickers with jittery event timing
+	const speed = distance / Math.max(now - lastMove, 1);
+	const target = Math.max(1 - speed * SPEED_NARROWING, MIN_RADIUS_SCALE);
+	radiusScale += (target - radiusScale) * RADIUS_SMOOTHING;
+
 	for (let i = 1; i <= steps; i++) {
-		spray(previous.x + (dx * i) / steps, previous.y + (dy * i) / steps, DOTS_PER_STEP);
+		spray(previous.x + (dx * i) / steps, previous.y + (dy * i) / steps, DOTS_PER_STEP, radiusScale);
 	}
+
 	previous = { x, y };
+	lastMove = now;
+	drawFooterCopy();
 }
 
 function onPointerUp() {
@@ -294,7 +369,11 @@ function swallow(e: Event) {
 let resizeTimer = 0;
 function onResize() {
 	clearTimeout(resizeTimer);
-	resizeTimer = window.setTimeout(sizeCanvas, 200);
+	resizeTimer = window.setTimeout(() => {
+		sizeCanvas();
+		sizeFooterLayer();
+		drawFooterCopy();
+	}, 200);
 }
 
 /* ---------------------------------------------------------------- public */
@@ -351,4 +430,5 @@ export function clearPaint() {
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 		ctx.restore();
 	}
+	drawFooterCopy();
 }

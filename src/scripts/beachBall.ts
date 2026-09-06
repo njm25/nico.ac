@@ -28,6 +28,9 @@ let canvas: HTMLCanvasElement | null = null;
 let ballTexture: THREE.CanvasTexture | null = null;
 let clock: THREE.Clock | null = null;
 let animating = false;
+let footerCanvas: HTMLCanvasElement | null = null;
+let footerCtx: CanvasRenderingContext2D | null = null;
+let footerRect: DOMRect | null = null;
 
 const balls: Ball[] = [];
 let nextBallId = 1;
@@ -85,7 +88,13 @@ function ensureScene() {
 	canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:-1;';
 	document.body.appendChild(canvas);
 
-	renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+	// preserveDrawingBuffer so the footer copy can drawImage from this canvas
+	renderer = new THREE.WebGLRenderer({
+		canvas,
+		alpha: true,
+		antialias: true,
+		preserveDrawingBuffer: true,
+	});
 	renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 	renderer.setSize(window.innerWidth, window.innerHeight);
 
@@ -101,6 +110,7 @@ function ensureScene() {
 
 	ballTexture = makeBeachBallTexture();
 	clock = new THREE.Clock();
+	ensureFooterLayer();
 
 	window.addEventListener('resize', onResize);
 	window.addEventListener('pointerdown', onPointerDown, { capture: true });
@@ -108,11 +118,70 @@ function ensureScene() {
 	window.addEventListener('pointerup', onPointerUp, { capture: true });
 }
 
+// The balls sit behind the page text, but the footer is a fixed opaque bar that
+// paints above that text - so a single layer can never be behind the text and
+// in front of the footer at once. This draws the same render a second time,
+// clipped to the footer and slotted between its background and its own text.
+function ensureFooterLayer() {
+	if (footerCanvas) return;
+	const footer = document.querySelector('footer');
+	if (!footer) return;
+
+	footerCanvas = document.createElement('canvas');
+	footerCanvas.className = 'beachball-footer-layer';
+	footerCanvas.setAttribute('aria-hidden', 'true');
+	footer.insertBefore(footerCanvas, footer.firstChild);
+	footerCtx = footerCanvas.getContext('2d');
+	measureFooter();
+}
+
+function measureFooter() {
+	const footer = document.querySelector('footer');
+	if (!footer || !footerCanvas || !renderer) return;
+
+	// inset:0 covers the padding box, so the copied region has to match it or
+	// the duplicate balls sit a border-width out of step with the real ones
+	const box = footer.getBoundingClientRect();
+	footerRect = new DOMRect(
+		box.left + footer.clientLeft,
+		box.top + footer.clientTop,
+		footer.clientWidth,
+		footer.clientHeight
+	);
+
+	const pixelRatio = renderer.getPixelRatio();
+	footerCanvas.width = Math.max(Math.round(footerRect.width * pixelRatio), 1);
+	footerCanvas.height = Math.max(Math.round(footerRect.height * pixelRatio), 1);
+}
+
+function drawFooterCopy() {
+	if (!footerCtx || !footerCanvas || !canvas) return;
+	if (!footerRect) measureFooter();
+	if (!footerRect) return;
+
+	footerCtx.clearRect(0, 0, footerCanvas.width, footerCanvas.height);
+	if (footerRect.width < 1 || footerRect.height < 1) return;
+
+	const pixelRatio = renderer!.getPixelRatio();
+	footerCtx.drawImage(
+		canvas,
+		footerRect.left * pixelRatio,
+		footerRect.top * pixelRatio,
+		footerRect.width * pixelRatio,
+		footerRect.height * pixelRatio,
+		0,
+		0,
+		footerCanvas.width,
+		footerCanvas.height
+	);
+}
+
 function onResize() {
 	if (!camera || !renderer) return;
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
 	renderer.setSize(window.innerWidth, window.innerHeight);
+	measureFooter();
 }
 
 function getVisibleBounds() {
@@ -405,6 +474,7 @@ function animate() {
 	stepPhysics(dt);
 	syncBallProxies();
 	renderer!.render(scene!, camera!);
+	drawFooterCopy();
 
 	if (!balls.length && !particles.length) {
 		animating = false;
