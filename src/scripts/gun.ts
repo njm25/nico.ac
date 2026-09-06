@@ -45,7 +45,7 @@ const SHOTGUN_SPREAD = 120;
 // the angle successive points on a sunflower spiral are separated by
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 // the rocket goes off at the radius everything used to have
-const RPG_RADIUS = 100;
+const RPG_RADIUS = 140;
 const MAX_HOLES = 160;
 // roughly 410 rounds per minute
 const AUTO_INTERVAL = 145;

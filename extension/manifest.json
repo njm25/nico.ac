@@ -2,8 +2,11 @@
 	"manifest_version": 3,
 	"name": "Page Shooter",
 	"version": "0.1.0",
-	"description": "Arm a pistol and shoot the text off any web page.",
-	"permissions": ["activeTab", "scripting"],
+	"description": "Arm a pistol, rifle, shotgun or rocket launcher and shoot the text off any web page.",
+	"permissions": [
+		"activeTab",
+		"scripting"
+	],
 	"action": {
 		"default_title": "Shoot this page"
 	},
@@ -12,8 +15,15 @@
 	},
 	"web_accessible_resources": [
 		{
-			"resources": ["pistol.glb"],
-			"matches": ["<all_urls>"]
+			"resources": [
+				"pistol.glb",
+				"rifle.glb",
+				"shotgun.glb",
+				"rpg.glb"
+			],
+			"matches": [
+				"<all_urls>"
+			]
 		}
 	]
 }

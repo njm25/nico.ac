@@ -7,11 +7,15 @@ import { getLetters } from './letterPhysics';
 
 const MAX_HOLES = 120;
 
+type MarkKind = 'hole' | 'scorch';
+
 interface Hole {
-	// page coordinates, so holes stay stuck to the spot on the page that was hit
+	// page coordinates, so marks stay stuck to the spot on the page that was hit
 	pageX: number;
 	pageY: number;
 	angle: number;
+	kind: MarkKind;
+	// a bullet hole's cracks, or a scorch's debris streaks: angle, bend, length
 	cracks: number[];
 }
 
@@ -174,19 +178,25 @@ export function kickReticle() {
 
 /* ------------------------------------------------------------------ holes */
 
-export function addHole(clientX: number, clientY: number) {
+export function addHole(clientX: number, clientY: number, kind: MarkKind = 'hole') {
 	const cracks: number[] = [];
-	const count = 6 + Math.floor(Math.random() * 4);
+	// a blast throws far more, and much further, than a bullet cracks
+	const count = kind === 'scorch' ? 16 + Math.floor(Math.random() * 8) : 6 + Math.floor(Math.random() * 4);
 	for (let i = 0; i < count; i++) {
-		const angle = (i / count) * Math.PI * 2 + Math.random() * 0.6;
+		const angle = (i / count) * Math.PI * 2 + Math.random() * (kind === 'scorch' ? 0.45 : 0.6);
 		const bend = angle + (Math.random() - 0.5) * 0.6;
-		cracks.push(angle, bend, 4.4 + Math.random() * 5.5);
+		cracks.push(
+			angle,
+			bend,
+			kind === 'scorch' ? 18 + Math.random() * 24 : 4.4 + Math.random() * 5.5
+		);
 	}
 
 	holes.push({
 		pageX: clientX + window.scrollX,
 		pageY: clientY + window.scrollY,
 		angle: Math.random() * Math.PI * 2,
+		kind,
 		cracks,
 	});
 	if (holes.length > MAX_HOLES) holes.shift();
@@ -224,11 +234,25 @@ function drawHoles(target: CanvasRenderingContext2D) {
 	for (const hole of holes) {
 		const x = hole.pageX - offsetX;
 		const y = hole.pageY - offsetY;
-		if (x < -30 || y < -30 || x > window.innerWidth + 30 || y > window.innerHeight + 30) continue;
+		const margin = hole.kind === 'scorch' ? 70 : 30;
+		if (
+			x < -margin ||
+			y < -margin ||
+			x > window.innerWidth + margin ||
+			y > window.innerHeight + margin
+		) {
+			continue;
+		}
 
 		target.save();
 		target.translate(x, y);
 		target.rotate(hole.angle);
+
+		if (hole.kind === 'scorch') {
+			drawScorch(target, hole);
+			target.restore();
+			continue;
+		}
 
 		target.strokeStyle = 'rgba(215,219,224,0.22)';
 		target.lineWidth = 0.7;
@@ -256,6 +280,43 @@ function drawHoles(target: CanvasRenderingContext2D) {
 
 		target.restore();
 	}
+}
+
+function drawScorch(target: CanvasRenderingContext2D, hole: Hole) {
+	// soot fading out from the middle, under everything else
+	const ground = target.createRadialGradient(0, 0, 0, 0, 0, 50);
+	ground.addColorStop(0, 'rgba(5,6,10,0.82)');
+	ground.addColorStop(0.36, 'rgba(5,6,10,0.45)');
+	ground.addColorStop(0.68, 'rgba(5,6,10,0)');
+	target.fillStyle = ground;
+	target.beginPath();
+	target.arc(0, 0, 50, 0, Math.PI * 2);
+	target.fill();
+
+	// debris flung out along the streaks
+	target.strokeStyle = 'rgba(8,8,10,0.5)';
+	target.lineWidth = 2.6;
+	target.lineCap = 'round';
+	target.beginPath();
+	for (let i = 0; i < hole.cracks.length; i += 3) {
+		const angle = hole.cracks[i];
+		const bend = hole.cracks[i + 1];
+		const outer = hole.cracks[i + 2];
+		const inner = 11 + (outer % 9);
+		target.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+		target.lineTo(Math.cos(bend) * (inner + outer), Math.sin(bend) * (inner + outer));
+	}
+	target.stroke();
+
+	target.fillStyle = 'rgba(5,6,10,0.8)';
+	target.beginPath();
+	target.arc(0, 0, 16, 0, Math.PI * 2);
+	target.fill();
+
+	target.fillStyle = '#000';
+	target.beginPath();
+	target.arc(0, 0, 9, 0, Math.PI * 2);
+	target.fill();
 }
 
 function drawLetters(target: CanvasRenderingContext2D) {

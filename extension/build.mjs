@@ -1,6 +1,9 @@
 import * as esbuild from 'esbuild';
 import { cp, mkdir, rm } from 'node:fs/promises';
 
+// every weapon the viewmodel can rack; each is also declared web accessible
+const MODELS = ['pistol.glb', 'rifle.glb', 'shotgun.glb', 'rpg.glb'];
+
 const watch = process.argv.includes('--watch');
 const outdir = 'dist';
 
@@ -9,7 +12,7 @@ await mkdir(outdir, { recursive: true });
 
 // static files sit next to the bundles so manifest paths stay flat
 await cp('manifest.json', `${outdir}/manifest.json`);
-await cp('public/pistol.glb', `${outdir}/pistol.glb`);
+for (const model of MODELS) await cp(`public/${model}`, `${outdir}/${model}`);
 await cp('src/page.css', `${outdir}/page.css`);
 
 const options = {
