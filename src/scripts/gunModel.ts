@@ -296,9 +296,9 @@ export function mountViewmodel() {
 	const pmrem = new THREE.PMREMGenerator(renderer);
 	scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-	const key = new THREE.DirectionalLight(0xfff3e0, 0.9);
+	const key = new THREE.DirectionalLight(0xffffff, 0.9);
 	key.position.set(1.4, 1.6, 0.9);
-	const fill = new THREE.DirectionalLight(0x7cc4ff, 0.25);
+	const fill = new THREE.DirectionalLight(0xffffff, 0.25);
 	fill.position.set(-1.6, 0.2, 0.6);
 	const rim = new THREE.DirectionalLight(0xffffff, 0.4);
 	rim.position.set(-0.6, 0.8, -1.6);

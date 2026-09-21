@@ -15,7 +15,6 @@ const { Content } = await render(post);
 ---
 
 <Base title={`nico · ${post.data.title}`} description={post.data.description} typewriter={false}>
-	<a href="/blog" class="dim">← blog</a>
 	<h1>{post.data.title}</h1>
 	<p class="meta">
 		{post.data.date.toLocaleDateString('en-us', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}

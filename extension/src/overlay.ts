@@ -55,7 +55,7 @@ const OVERLAY_CSS = `
 	height: 40px;
 	margin: -20px 0 0 -20px;
 	pointer-events: none;
-	color: #7cc4ff;
+	color: #fff;
 	opacity: 0;
 	transition: opacity 0.15s ease;
 	filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.95));

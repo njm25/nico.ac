@@ -55,8 +55,8 @@ function showErrorBanner(message: string) {
 	const banner = document.createElement('div');
 	banner.textContent = `sandbox error: ${message}`;
 	banner.style.cssText =
-		'position:fixed;left:1.25rem;bottom:1.25rem;z-index:99999;background:var(--bg-raised,#101216);' +
-		'color:var(--text,#d7dbe0);border:1px solid var(--border,#1d2027);border-radius:4px;' +
+		'position:fixed;left:1.25rem;bottom:1.25rem;z-index:99999;background:var(--bg-raised,#000);' +
+		'color:var(--text,#fff);border:1px solid var(--border,#fff);border-radius:4px;' +
 		'padding:0.6rem 0.9rem;font-family:var(--mono,monospace);font-size:0.8rem;max-width:280px;';
 	document.body.appendChild(banner);
 	setTimeout(() => banner.remove(), 6000);

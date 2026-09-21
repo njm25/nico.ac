@@ -1,11 +1,11 @@
 :root {
-	--bg: #0a0b0d;
-	--bg-raised: #101216;
-	--text: #d7dbe0;
-	--text-dim: #767c88;
-	--text-faint: #454b56;
-	--accent: #7cc4ff;
-	--border: #1d2027;
+	--bg: #000;
+	--bg-raised: #000;
+	--text: #fff;
+	--text-dim: #fff;
+	--text-faint: #fff;
+	--accent: #fff;
+	--border: #fff;
 	--mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 	--max-width: 640px;
 }
