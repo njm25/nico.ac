@@ -7,6 +7,12 @@ export interface Project {
 
 export const projects: Project[] = [
 	{
+		title: 'Leon County Value',
+		description: 'A simple GIS map for visualizing Leon County parcel value',
+		link: 'https://leonvalue.com',
+		year: '2026',
+	},
+	{
 		title: 'Nicos Jobs',
 		description: 'A job board aggregate which scrapes thousands of companies job pages directly and allows users to track application status.',
 		link: 'https://nicosjobs.com',
