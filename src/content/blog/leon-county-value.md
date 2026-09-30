@@ -1,0 +1,7 @@
+---
+title: Leon County Value
+description: an update on what ive been working on
+date: 2026-09-30
+---
+
+ive gotten a little burnt out on working on [nicos jobs](https://nicosjobs.com), and [the film archive](https://thefilmarchive.org) has kind of reached a completed state and ive been wanting to build a small little project recently which leverages some public api in a cool way. after doing much research on many different apis, earth, ocean, infrastructure, and a bunch of others, i stumbled upon fsu's [FREAC](https://freac.fsu.edu/). they have a little box which is hosting parcel data for the 2019 tax year, and it includes locational and pricing data for all of the land parcels in leon county. after pulling on this thread some more and using claude to vibe out a simple frontend, i found that this was the small project i was looking for. i wasnt too happy with the fact that this data was from 2019 and wanted more updated data, and i quickly found that leon county has their own GIS host which provides the most up to date data for this. i poked around the services that they have, and none of them easily allowed the user to simply hover over a land parcel and see its value. and thus i created [Leon County Value](https://leonvalue.com). it only took me a couple hours using claude to make the product you see thats hosted now, and im pretty happy with how it turned out. go take a look at the site now and if your a leon county resident, see what your land value is at! anyways, thats it for today, thanks for reading <span class="no-lowercase">:D</span>
