@@ -31,6 +31,12 @@ export const projects: Project[] = [
 		year: '2026',
 	},
 	{
+		title: 'Wither Chunks',
+		description: 'A minecraft plugin for enhancing wither skeleton spawn rates in specified chunks',
+		link: 'https://github.com/njm25/WitherChunks',
+		year: '2025',
+	},
+	{
 		title: 'NCCasino',
 		description: 'A casino plugin for minecraft servers. Feature rich with many games',
 		link: 'https://www.curseforge.com/minecraft/bukkit-plugins/nccasino',
