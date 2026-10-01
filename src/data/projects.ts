@@ -25,6 +25,12 @@ export const projects: Project[] = [
 		year: '2026',
 	},
 	{
+		title: 'Speaker Swimmer',
+		description: 'An infinite runner game built for Mini Jame Gam #51.',
+		link: 'https://runkman.itch.io/speaker-swimmer',
+		year: '2026',
+	},
+	{
 		title: 'NCCasino',
 		description: 'A casino plugin for minecraft servers. Feature rich with many games.',
 		link: 'https://www.curseforge.com/minecraft/bukkit-plugins/nccasino',
